@@ -1,0 +1,40 @@
+version: "1.0"
+timezone: "Asia/Saigon"
+agent: helper
+
+jobs:
+  - id: daily_summary_report
+    schedule: "0 0 22 * * *"
+    description: 22:00 daily summary — tổng kết ngày cho owner
+    enabled: true
+    prompt: |
+      Daily helper summary 22:00:
+      1. Đọc data/conversations/<today>/*.jsonl
+      2. Tính: tổng tin nhắn, auto-resolved (%), KB-resolved (%), escalated (%), avg response time
+      3. Top 5 câu hỏi (gợi ý FAQ mới cần viết)
+      4. Khách VIP có nhiều escalation
+      5. CSAT nếu có survey
+      6. Gửi Telegram cho owner: tóm tắt + flag + đề xuất FAQ mới
+
+  - id: weekly_kb_audit
+    schedule: "0 0 9 * * 1"
+    description: Thứ 2 9h audit KB, update FAQ từ câu hỏi tuần qua
+    enabled: true
+    prompt: |
+      Weekly KB audit:
+      1. Đọc data/conversations/ trong tuần qua
+      2. Tìm câu hỏi lặp lại ≥ 3 lần mà chưa có trong FAQ → đề xuất thêm
+      3. Tìm KB entry outdated (link die, version cũ) → flag cập nhật
+      4. Update data/faq.json (sau khi owner duyệt)
+      5. Update memory/MEMORY.md với trend câu hỏi
+
+  - id: stale_escalation_check
+    schedule: "0 0 */2 * * *"
+    description: Mỗi 2h check escalation nào owner chưa reply
+    enabled: true
+    prompt: |
+      Stale escalation check:
+      1. Liệt kê data/escalations/*.md
+      2. Nếu escalation > 1h (giờ hành chính) hoặc > 4h (ngoài giờ) chưa có owner reply → gửi Telegram reminder
+      3. Nếu > 6h → flag critical, ping owner lần 2
+      4. Nếu > 24h → flag, hỏi owner có cần Helper tự reply không

@@ -1,0 +1,27 @@
+version: "1.0"
+timezone: "Asia/Saigon"
+agent: architect
+
+jobs:
+  - id: check_pending_handoffs
+    schedule: "0 */2 * * *"
+    description: Mỗi 2h check xem có handoff nào pending Forge pickup chưa
+    enabled: true
+    prompt: |
+      Check handoff status:
+      1. Liệt kê data/handoff/*.json
+      2. Nếu có status "pending_owner_review" > 24h → gửi Telegram reminder cho owner
+      3. Nếu có status "approved" mà Forge chưa pickup > 1h → gửi Telegram cho Forge agent
+      4. Nếu có status "in_progress" > 7 ngày không update → flag stale, hỏi Forge status
+
+  - id: weekly_spec_review
+    schedule: "0 0 9 * * 1"
+    description: Thứ 2 9h review spec tuần qua, note common issue để cải thiện
+    enabled: true
+    prompt: |
+      Weekly spec retrospective:
+      1. Đọc data/specs/*.md trong tuần qua
+      2. Note spec nào owner reject, lý do gì
+      3. Note spec nào Forge struggled (effort estimate sai, thiếu thông tin)
+      4. Update memory/MEMORY.md với lesson learned
+      5. Nếu có > 30% spec bị reject vì cùng lý do → cảnh báo owner để update template

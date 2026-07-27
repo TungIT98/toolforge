@@ -1,0 +1,39 @@
+version: "1.0"
+
+roles: [owner, scout_agent]
+
+actions:
+  - id: scout_read_briefs
+    description: "Đọc brief cũ trong data/briefs/"
+    allowed_roles: [owner, scout_agent]
+    data_tier: PUBLIC
+
+  - id: scout_write_brief
+    description: "Tạo brief mới trong data/briefs/"
+    allowed_roles: [scout_agent]
+    data_tier: INTERNAL
+
+  - id: scout_web_search
+    description: "Search web công khai"
+    allowed_roles: [scout_agent]
+    data_tier: PUBLIC
+
+  - id: scout_web_fetch
+    description: "Fetch URL công khai"
+    allowed_roles: [scout_agent]
+    data_tier: PUBLIC
+
+  - id: scout_send_notification
+    description: "Gửi Telegram notification cho owner"
+    allowed_roles: [scout_agent]
+    data_tier: INTERNAL
+
+  - id: scout_read_memory
+    description: "Đọc memory/MEMORY.md"
+    allowed_roles: [scout_agent, owner]
+    data_tier: INTERNAL
+
+  - id: scout_call_architect
+    description: "Trigger Architect agent từ brief"
+    allowed_roles: [scout_agent, owner]
+    data_tier: INTERNAL

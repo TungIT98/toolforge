@@ -1,0 +1,59 @@
+version: "1.0"
+
+roles: [owner, hype_agent]
+
+actions:
+  - id: hype_read_spec
+    description: "Đọc spec + build report"
+    allowed_roles: [owner, hype_agent]
+    data_tier: INTERNAL
+
+  - id: hype_write_copy
+    description: "Viết copy landing page, ad, script"
+    allowed_roles: [hype_agent]
+    data_tier: INTERNAL
+
+  - id: hype_deploy_landing
+    description: "Deploy landing page lên Cloudflare Pages"
+    allowed_roles: [hype_agent]
+    data_tier: INTERNAL
+
+  - id: hype_publish_ad
+    description: "Post quảng cáo Facebook/TikTok"
+    allowed_roles: [hype_agent]
+    data_tier: CONFIDENTIAL
+
+  - id: hype_seed_group
+    description: "Seeding trong Facebook/Telegram group"
+    allowed_roles: [hype_agent, owner]
+    data_tier: INTERNAL
+
+  - id: hype_read_analytics
+    description: "Đọc Meta/TikTok/Google analytics"
+    allowed_roles: [hype_agent, owner]
+    data_tier: INTERNAL
+
+  - id: hype_optimize_campaign
+    description: "A/B test, scale budget, pause ad"
+    allowed_roles: [hype_agent]
+    data_tier: CONFIDENTIAL
+
+  - id: hype_send_report
+    description: "Gửi report cho owner"
+    allowed_roles: [hype_agent]
+    data_tier: INTERNAL
+
+  - id: hype_read_memory
+    description: "Đọc memory/MEMORY.md"
+    allowed_roles: [hype_agent, owner]
+    data_tier: INTERNAL
+
+  - id: hype_pause_campaign
+    description: "Owner quyết định pause campaign"
+    allowed_roles: [owner]
+    data_tier: CONFIDENTIAL
+
+  - id: hype_scale_budget
+    description: "Owner duyệt scale budget > 10tr/tuần"
+    allowed_roles: [owner]
+    data_tier: CONFIDENTIAL

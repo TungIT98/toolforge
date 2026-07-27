@@ -1,0 +1,69 @@
+version: "1.0"
+
+roles: [owner, forge_agent]
+
+actions:
+  - id: forge_read_spec
+    description: "Đọc spec từ Architect"
+    allowed_roles: [owner, forge_agent]
+    data_tier: INTERNAL
+
+  - id: forge_read_handoff
+    description: "Đọc handoff JSON"
+    allowed_roles: [owner, forge_agent]
+    data_tier: INTERNAL
+
+  - id: forge_write_code
+    description: "Viết/sửa code trong data/builds/"
+    allowed_roles: [forge_agent]
+    data_tier: INTERNAL
+
+  - id: forge_run_tests
+    description: "Chạy test (unit, integration, manual)"
+    allowed_roles: [forge_agent]
+    data_tier: INTERNAL
+
+  - id: forge_build_binary
+    description: "Build .exe/.dmg/.AppImage"
+    allowed_roles: [forge_agent]
+    data_tier: INTERNAL
+
+  - id: forge_upload_r2
+    description: "Upload binary lên R2, generate signed URL"
+    allowed_roles: [forge_agent]
+    data_tier: CONFIDENTIAL
+
+  - id: forge_generate_license
+    description: "Generate license key, save vào D1"
+    allowed_roles: [forge_agent]
+    data_tier: CONFIDENTIAL
+
+  - id: forge_gh_push
+    description: "Push code lên GitHub repo"
+    allowed_roles: [forge_agent]
+    data_tier: INTERNAL
+
+  - id: forge_gh_release
+    description: "Tạo GitHub Release"
+    allowed_roles: [forge_agent]
+    data_tier: INTERNAL
+
+  - id: forge_send_notification
+    description: "Gửi Telegram notification"
+    allowed_roles: [forge_agent]
+    data_tier: INTERNAL
+
+  - id: forge_read_memory
+    description: "Đọc memory/MEMORY.md"
+    allowed_roles: [forge_agent, owner]
+    data_tier: INTERNAL
+
+  - id: forge_approve_build
+    description: "Owner duyệt build, trigger Hype"
+    allowed_roles: [owner]
+    data_tier: CONFIDENTIAL
+
+  - id: forge_reject_build
+    description: "Owner reject build, yêu cầu fix"
+    allowed_roles: [owner]
+    data_tier: CONFIDENTIAL

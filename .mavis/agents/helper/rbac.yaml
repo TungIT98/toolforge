@@ -1,0 +1,59 @@
+version: "1.0"
+
+roles: [owner, helper_agent]
+
+actions:
+  - id: helper_read_message
+    description: "Đọc tin nhắn từ Telegram/Facebook"
+    allowed_roles: [helper_agent]
+    data_tier: INTERNAL
+
+  - id: helper_send_reply
+    description: "Reply tin nhắn cho khách"
+    allowed_roles: [helper_agent]
+    data_tier: INTERNAL
+
+  - id: helper_read_faq
+    description: "Đọc FAQ + KB"
+    allowed_roles: [helper_agent, owner]
+    data_tier: PUBLIC
+
+  - id: helper_write_faq
+    description: "Thêm FAQ mới vào KB"
+    allowed_roles: [helper_agent]
+    data_tier: INTERNAL
+
+  - id: helper_escalate
+    description: "Escalate ticket cho owner"
+    allowed_roles: [helper_agent]
+    data_tier: INTERNAL
+
+  - id: helper_log_conversation
+    description: "Log conversation vào data/conversations/"
+    allowed_roles: [helper_agent]
+    data_tier: INTERNAL
+
+  - id: helper_read_analytics
+    description: "Xem CSAT, response time stats"
+    allowed_roles: [helper_agent, owner]
+    data_tier: INTERNAL
+
+  - id: helper_send_daily_report
+    description: "Gửi daily report cho owner"
+    allowed_roles: [helper_agent]
+    data_tier: INTERNAL
+
+  - id: helper_read_memory
+    description: "Đọc memory/MEMORY.md"
+    allowed_roles: [helper_agent, owner]
+    data_tier: INTERNAL
+
+  - id: helper_refund
+    description: "Xử lý refund (chỉ owner)"
+    allowed_roles: [owner]
+    data_tier: CONFIDENTIAL
+
+  - id: helper_block_user
+    description: "Block user spam/abuse (chỉ owner)"
+    allowed_roles: [owner]
+    data_tier: CONFIDENTIAL

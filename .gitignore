@@ -1,0 +1,45 @@
+# Secrets
+.env
+.env.local
+*.key
+secrets/
+.wrangler/
+.dev.vars
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+build/
+*.log
+.npm/
+
+# Rust (Tauri)
+target/
+**/*.rs.bk
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Mavis runtime
+.mavis/agents/*/sessions/
+.mavis/agents/*/data/*.tmp
+.mavis/agents/*/memory/cache/
+
+# Build artifacts
+*.exe
+*.dmg
+*.AppImage
+releases/

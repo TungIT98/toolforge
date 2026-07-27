@@ -1,0 +1,44 @@
+version: "1.0"
+
+roles: [owner, architect_agent]
+
+actions:
+  - id: arch_read_brief
+    description: "Đọc brief từ Scout"
+    allowed_roles: [owner, architect_agent]
+    data_tier: INTERNAL
+
+  - id: arch_write_spec
+    description: "Tạo/cập nhật spec trong data/specs/"
+    allowed_roles: [architect_agent]
+    data_tier: INTERNAL
+
+  - id: arch_write_handoff
+    description: "Tạo/cập nhật handoff JSON cho Forge"
+    allowed_roles: [architect_agent]
+    data_tier: INTERNAL
+
+  - id: arch_research
+    description: "Web search/fetch để research thêm"
+    allowed_roles: [architect_agent]
+    data_tier: PUBLIC
+
+  - id: arch_send_notification
+    description: "Gửi Telegram notification cho owner"
+    allowed_roles: [architect_agent]
+    data_tier: INTERNAL
+
+  - id: arch_read_memory
+    description: "Đọc memory/MEMORY.md"
+    allowed_roles: [architect_agent, owner]
+    data_tier: INTERNAL
+
+  - id: arch_approve_spec
+    description: "Owner duyệt spec (trigger Forge)"
+    allowed_roles: [owner]
+    data_tier: CONFIDENTIAL
+
+  - id: arch_reject_spec
+    description: "Owner reject spec"
+    allowed_roles: [owner]
+    data_tier: CONFIDENTIAL

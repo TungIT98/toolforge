@@ -1,0 +1,21 @@
+{
+  "allow": [
+    "scout-read-briefs(role:owner tier:PUBLIC)",
+    "scout-read-briefs(role:scout_agent tier:PUBLIC)",
+    "scout-write-brief(role:scout_agent tier:INTERNAL)",
+    "scout-web-search(role:scout_agent tier:PUBLIC)",
+    "scout-web-fetch(role:scout_agent tier:PUBLIC)",
+    "scout-send-notification(role:scout_agent tier:INTERNAL)",
+    "scout-read-memory(role:owner tier:INTERNAL)",
+    "scout-read-memory(role:scout_agent tier:INTERNAL)",
+    "scout-call-architect(role:owner tier:INTERNAL)",
+    "scout-call-architect(role:scout_agent tier:INTERNAL)"
+  ],
+  "deny": [
+    "scout-write-brief(role:owner tier:INTERNAL)",
+    "scout-web-search(role:owner tier:PUBLIC)",
+    "scout-web-fetch(role:owner tier:PUBLIC)",
+    "scout-send-notification(role:owner tier:INTERNAL)"
+  ],
+  "ask": []
+}

@@ -1,0 +1,40 @@
+version: "1.0"
+timezone: "Asia/Saigon"
+agent: hype
+
+jobs:
+  - id: daily_ads_report
+    schedule: "0 0 21 * * *"
+    description: 21:00 daily report ads performance hôm nay
+    enabled: true
+    prompt: |
+      Daily ads report 21:00:
+      1. Fetch Meta + TikTok + Google analytics
+      2. Tính: spend, reach, click, install, purchase, ROAS cho mỗi tool
+      3. So sánh với hôm qua + trung bình tuần
+      4. Flag campaign nào ROAS < 1.5
+      5. Gửi Telegram cho owner: tóm tắt + flag + đề xuất hành động
+
+  - id: weekly_campaign_review
+    schedule: "0 0 10 * * 1"
+    description: Thứ 2 10h review campaign tuần qua
+    enabled: true
+    prompt: |
+      Weekly campaign review:
+      1. Đọc data/campaigns/*/report-week-*.md
+      2. Top 3 ad copy winner (highest ROAS)
+      3. Top 3 ad copy loser (lowest ROAS) — note lý do
+      4. Audience insight: nào convert tốt nhất
+      5. Update memory/MEMORY.md với pattern + best practice
+      6. Đề xuất campaign mới tuần tới (dựa trên winner)
+
+  - id: ab_test_check
+    schedule: "0 0 14 * * *"
+    description: 14:00 daily check A/B test status
+    enabled: true
+    prompt: |
+      A/B test check:
+      1. Liệt kê campaign đang A/B test
+      2. Nếu 1 variant đạt > 1000 impression + statistical significance → kết luận winner
+      3. Winner: scale budget 2x, loser: pause
+      4. Nếu cả 2 chưa đủ data → đợi thêm, log lại

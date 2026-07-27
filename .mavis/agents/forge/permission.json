@@ -1,0 +1,34 @@
+{
+  "allow": [
+    "forge-read-spec(role:owner tier:INTERNAL)",
+    "forge-read-spec(role:forge_agent tier:INTERNAL)",
+    "forge-read-handoff(role:owner tier:INTERNAL)",
+    "forge-read-handoff(role:forge_agent tier:INTERNAL)",
+    "forge-write-code(role:forge_agent tier:INTERNAL)",
+    "forge-run-tests(role:forge_agent tier:INTERNAL)",
+    "forge-build-binary(role:forge_agent tier:INTERNAL)",
+    "forge-upload-r2(role:forge_agent tier:CONFIDENTIAL)",
+    "forge-generate-license(role:forge_agent tier:CONFIDENTIAL)",
+    "forge-gh-push(role:forge_agent tier:INTERNAL)",
+    "forge-gh-release(role:forge_agent tier:INTERNAL)",
+    "forge-send-notification(role:forge_agent tier:INTERNAL)",
+    "forge-read-memory(role:owner tier:INTERNAL)",
+    "forge-read-memory(role:forge_agent tier:INTERNAL)",
+    "forge-approve-build(role:owner tier:CONFIDENTIAL)",
+    "forge-reject-build(role:owner tier:CONFIDENTIAL)"
+  ],
+  "deny": [
+    "forge-write-code(role:owner tier:INTERNAL)",
+    "forge-run-tests(role:owner tier:INTERNAL)",
+    "forge-build-binary(role:owner tier:INTERNAL)",
+    "forge-upload-r2(role:owner tier:CONFIDENTIAL)",
+    "forge-generate-license(role:owner tier:CONFIDENTIAL)",
+    "forge-gh-push(role:owner tier:INTERNAL)",
+    "forge-gh-release(role:owner tier:INTERNAL)",
+    "forge-send-notification(role:owner tier:INTERNAL)"
+  ],
+  "ask": [
+    "forge-approve-build(role:forge_agent tier:CONFIDENTIAL)",
+    "forge-reject-build(role:forge_agent tier:CONFIDENTIAL)"
+  ]
+}

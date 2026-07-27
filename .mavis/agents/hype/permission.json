@@ -1,0 +1,31 @@
+{
+  "allow": [
+    "hype-read-spec(role:owner tier:INTERNAL)",
+    "hype-read-spec(role:hype_agent tier:INTERNAL)",
+    "hype-write-copy(role:hype_agent tier:INTERNAL)",
+    "hype-deploy-landing(role:hype_agent tier:INTERNAL)",
+    "hype-publish-ad(role:hype_agent tier:CONFIDENTIAL)",
+    "hype-seed-group(role:owner tier:INTERNAL)",
+    "hype-seed-group(role:hype_agent tier:INTERNAL)",
+    "hype-read-analytics(role:owner tier:INTERNAL)",
+    "hype-read-analytics(role:hype_agent tier:INTERNAL)",
+    "hype-optimize-campaign(role:hype_agent tier:CONFIDENTIAL)",
+    "hype-send-report(role:hype_agent tier:INTERNAL)",
+    "hype-read-memory(role:owner tier:INTERNAL)",
+    "hype-read-memory(role:hype_agent tier:INTERNAL)",
+    "hype-pause-campaign(role:owner tier:CONFIDENTIAL)",
+    "hype-scale-budget(role:owner tier:CONFIDENTIAL)"
+  ],
+  "deny": [
+    "hype-write-copy(role:owner tier:INTERNAL)",
+    "hype-deploy-landing(role:owner tier:INTERNAL)",
+    "hype-publish-ad(role:owner tier:CONFIDENTIAL)",
+    "hype-read-analytics(role:owner tier:INTERNAL)",
+    "hype-send-report(role:owner tier:INTERNAL)"
+  ],
+  "ask": [
+    "hype-pause-campaign(role:hype_agent tier:CONFIDENTIAL)",
+    "hype-scale-budget(role:hype_agent tier:CONFIDENTIAL)",
+    "hype-optimize-campaign(role:owner tier:CONFIDENTIAL)"
+  ]
+}

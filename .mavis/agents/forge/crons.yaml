@@ -1,0 +1,37 @@
+version: "1.0"
+timezone: "Asia/Saigon"
+agent: forge
+
+jobs:
+  - id: check_approved_handoffs
+    schedule: "0 */1 * * *"
+    description: Mỗi giờ check spec đã approved mà chưa build
+    enabled: true
+    prompt: |
+      Check handoff status mỗi giờ:
+      1. Liệt kê data/handoff/*.json có status "approved"
+      2. Nếu chưa có folder data/builds/<tool-id>/ → tự động bắt đầu build
+      3. Nếu đang build (status "in_progress") > 48h → flag stale, ping owner
+      4. Nếu status "done" > 7 ngày mà Hype chưa pickup → flag stale, ping Hype
+
+  - id: weekly_build_retrospective
+    schedule: "0 0 10 * * 1"
+    description: Thứ 2 10h review build tuần qua
+    enabled: true
+    prompt: |
+      Weekly build retrospective:
+      1. Đọc data/builds/*/report.md trong tuần qua
+      2. Note effort actual vs estimate, library issue, build fail
+      3. Update memory/MEMORY.md với gotcha + best practice
+      4. Nếu > 30% build fail vì cùng lý do → cảnh báo owner + đề xuất cải thiện spec template
+
+  - id: r2_license_audit
+    schedule: "0 0 2 * * *"
+    description: Daily 2h sáng audit R2 binary + license mapping
+    enabled: true
+    prompt: |
+      R2 + license audit:
+      1. Liệt kê R2 bucket toolforge-tools/, so sánh với D1 licenses table
+      2. Detect orphan binary (R2 có, D1 không có license) → report owner
+      3. Detect expired signed URL (> 7 ngày) → regenerate
+      4. Detect unused license (> 90 ngày không activate) → flag low usage

@@ -1,0 +1,21 @@
+{
+  "allow": [
+    "arch-read-brief(role:owner tier:INTERNAL)",
+    "arch-read-brief(role:architect_agent tier:INTERNAL)",
+    "arch-write-spec(role:architect_agent tier:INTERNAL)",
+    "arch-write-handoff(role:architect_agent tier:INTERNAL)",
+    "arch-research(role:architect_agent tier:PUBLIC)",
+    "arch-send-notification(role:architect_agent tier:INTERNAL)",
+    "arch-read-memory(role:owner tier:INTERNAL)",
+    "arch-read-memory(role:architect_agent tier:INTERNAL)",
+    "arch-approve-spec(role:owner tier:CONFIDENTIAL)",
+    "arch-reject-spec(role:owner tier:CONFIDENTIAL)"
+  ],
+  "deny": [
+    "arch-write-spec(role:owner tier:INTERNAL)",
+    "arch-write-handoff(role:owner tier:INTERNAL)",
+    "arch-research(role:owner tier:PUBLIC)",
+    "arch-send-notification(role:owner tier:INTERNAL)"
+  ],
+  "ask": []
+}

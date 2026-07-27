@@ -1,0 +1,30 @@
+{
+  "allow": [
+    "helper-read-message(role:helper_agent tier:INTERNAL)",
+    "helper-send-reply(role:helper_agent tier:INTERNAL)",
+    "helper-read-faq(role:owner tier:PUBLIC)",
+    "helper-read-faq(role:helper_agent tier:PUBLIC)",
+    "helper-write-faq(role:helper_agent tier:INTERNAL)",
+    "helper-escalate(role:helper_agent tier:INTERNAL)",
+    "helper-log-conversation(role:helper_agent tier:INTERNAL)",
+    "helper-read-analytics(role:owner tier:INTERNAL)",
+    "helper-read-analytics(role:helper_agent tier:INTERNAL)",
+    "helper-send-daily-report(role:helper_agent tier:INTERNAL)",
+    "helper-read-memory(role:owner tier:INTERNAL)",
+    "helper-read-memory(role:helper_agent tier:INTERNAL)",
+    "helper-refund(role:owner tier:CONFIDENTIAL)",
+    "helper-block-user(role:owner tier:CONFIDENTIAL)"
+  ],
+  "deny": [
+    "helper-read-message(role:owner tier:INTERNAL)",
+    "helper-send-reply(role:owner tier:INTERNAL)",
+    "helper-write-faq(role:owner tier:INTERNAL)",
+    "helper-escalate(role:owner tier:INTERNAL)",
+    "helper-log-conversation(role:owner tier:INTERNAL)",
+    "helper-send-daily-report(role:owner tier:INTERNAL)"
+  ],
+  "ask": [
+    "helper-refund(role:helper_agent tier:CONFIDENTIAL)",
+    "helper-block-user(role:helper_agent tier:CONFIDENTIAL)"
+  ]
+}

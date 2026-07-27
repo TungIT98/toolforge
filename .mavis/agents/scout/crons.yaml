@@ -1,0 +1,30 @@
+version: "1.0"
+timezone: "Asia/Saigon"
+agent: scout
+
+jobs:
+  - id: daily_pain_scan
+    schedule: "0 0 6 * * *"
+    description: Daily pain point scan lúc 06:00 — research top 10 pain point từ MMO/creator community
+    enabled: true
+    prompt: |
+      Chạy daily pain point scan:
+      1. Đọc data/briefs/last-week-summary.md (nếu có) để skip pain point đã research
+      2. Scan 8 nguồn: TikTok comments, YouTube comments, Telegram groups MMO VN, FB groups, Voz/TinhTe, Google Trends, aff.1touch.pro, 1touch.pro
+      3. Trích xuất top 10 pain point với severity, audience, market size, current solutions, gap
+      4. Save data/briefs/YYYY-MM-DD.md theo format trong PERSONA.md
+      5. Update data/briefs/last-week-summary.md
+      6. Nếu có ≥ 1 pain point severity ≥ 7 MỚI → gửi Telegram cho owner: "Scout đã chạy xong, có X pain point mới. Mở brief: <path>"
+      7. Update memory/MEMORY.md với top 10 pain point mới
+
+  - id: weekly_competitor_check
+    schedule: "0 0 7 * * 1"
+    description: Weekly check catalog aff.1touch.pro thứ 2 07:00 — note tool mới/xóa
+    enabled: true
+    prompt: |
+      Weekly competitor check:
+      1. Fetch aff.1touch.pro + 1touch.pro
+      2. So sánh với data/competitors/1touch-last-week.md
+      3. Note tool mới, tool xóa, thay đổi giá
+      4. Save data/competitors/1touch-YYYY-MM-DD.md
+      5. Nếu có tool mới → flag trong brief cuối tuần
