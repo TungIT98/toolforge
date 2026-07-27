@@ -1,0 +1,32 @@
+feat(p2.2): Store landing page (React + Vite + CF Pages)
+
+P2.2 deliverables (Store Frontend):
+- web/package.json: React 18 + Vite 5 + TypeScript + React Router
+- web/vite.config.ts: Vite config with /api proxy to local Worker
+- web/index.html: Vietnamese lang, meta description
+- web/src/main.tsx: React 18 root + BrowserRouter
+- web/src/App.tsx: Header + Routes (Home, ToolDetail) + Footer
+- web/src/api.ts: Typed API client (getTools, getTool, getStats, getHealth)
+- web/src/index.css: Dark hero, light cards, responsive grid
+- web/src/pages/Home.tsx: Hero search + stats bar + filters + product grid
+- web/src/pages/ToolDetail.tsx: Full tool detail with build + license info
+- web/public/favicon.svg: ToolForge logo
+- web/public/_redirects: SPA fallback for CF Pages
+- web/.gitignore: node_modules + dist
+- web/wrangler.jsonc: CF Pages config
+- docs/P2-DEPLOY.md: Step-by-step deploy guide
+
+Features:
+- Responsive product grid (auto-fill minmax 280px)
+- Filter by niche (MMO reup / content creator / productivity)
+- Search across name + description
+- Stats bar (total / paid / free / active licenses)
+- Tool detail with download + Telegram contact buttons
+- Tag display
+- CORS-friendly (Worker has CORS headers default)
+- Real-time Vite proxy to local Worker in dev
+
+Note: P2.1 tests still 85 passing (no regression on backend)
+Frontend cannot be unit tested without browser; manual verify after deploy.
+
+Next: P2.3 SePay webhook + license auto-activation

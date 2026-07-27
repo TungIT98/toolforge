@@ -1,0 +1,32 @@
+feat(p2.1): Store catalog API with seed data
+
+P2.1 deliverables (Store catalog):
+- src/store/seed.py: 7 mock tools (Capcut Reup, Voice Clone, StoryClone,
+  Flow Captcha, Cloudflare Manager, 1TouchDrive, Antidetect) based on
+  1Touch Pro catalog. seed_to_d1() idempotent.
+- src/store/catalog.py: get_tools() with filters (niche, status, q search,
+  sort, order, limit, offset) + whitelist validation. get_tool_detail()
+  with latest build + active license count. get_catalog_stats() with
+  by_niche, by_status, free vs paid breakdown.
+- src/store/admin.py: add_tool() with full validation (niche, status,
+  pricing). update_tool() with whitelist fields filter (SQL injection safe).
+- src/handlers/store.py: 6 HTTP endpoints
+  - GET  api store tools                 List + filters
+  - GET  api store tools ID              Detail with build + license count
+  - GET  api store stats                 Catalog overview
+  - POST api store tools                 Admin add
+  - PUT  api store tools ID              Admin update
+  - POST api store seed                  First-time seed (idempotent)
+
+Test infrastructure: FakeD1 enhanced with:
+- LIKE filter (with and without = sign)
+- OR clause support in WHERE
+- ORDER BY + LIMIT + OFFSET
+- GROUP BY aggregate (real groupby on tables)
+- COUNT(*) aggregate for license count
+
+Tests: 85 passed locally (was 58, plus 27 new)
+- test_store.py: 27 tests (seed, catalog, admin, constants)
+- test_e2e.py: refactored FakeD1 still passes 5 e2e tests
+
+Next: P2.2 Landing page (React + Vite) on Cloudflare Pages

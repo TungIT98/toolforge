@@ -1,0 +1,9 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "toolforge-web",
+  "compatibility_date": "2025-07-01",
+  "pages_build_output_dir": "./dist",
+  "vars": {
+    "VITE_API_BASE": ""  // Empty = use relative path. Set to Worker URL if separate domain.
+  }
+}
