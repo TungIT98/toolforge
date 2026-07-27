@@ -30,7 +30,7 @@ from src.forge.r2_uploader import (
     generate_signed_url,
     is_valid_r2_config,
 )
-from src.forge.webhook import handle_build_complete, verify_webhook_secret
+from src.forge.webhook import handle_build_complete, verify_webhook_secret, webhook_handler_response
 from src.handlers.middleware import apply_rate_limit
 from src.lib.log import get_logger
 from src.lib.response import error_response, json_response
@@ -308,3 +308,46 @@ async def forge_get_handler(request: "object", env: "object", ctx: "object") -> 
     if not build:
         return error_response(f"Build {build_id} not found", status=404, code="BUILD_NOT_FOUND")
     return json_response({"ok": True, "build": build})
+
+
+@route("POST", "/api/forge/webhook/built")
+async def webhook_built_handler(request: "object", env: "object", ctx: "object") -> "Response":
+    """Handle GH Action callback when build completes.
+
+    Security:
+    - Requires X-Webhook-Secret header matching env.WEBHOOK_SECRET (HMAC compare)
+    - FAIL-CLOSED: if env.WEBHOOK_SECRET is empty/unset, return 503
+      (refuse to process, force owner to set the secret before going live)
+    - Returns 401 on missing/wrong secret
+
+    Request body: { "build_id", "tool_id", "version", "status", "binary_url",
+                    "size_bytes", "test_result", "error" }
+    """
+    # 1. Fail-closed: if env has no WEBHOOK_SECRET, refuse entirely
+    expected_secret = getattr(env, "WEBHOOK_SECRET", "") or os.environ.get("WEBHOOK_SECRET", "")
+    if not expected_secret:
+        log.error("webhook_secret_not_configured", action="fail_closed")
+        return error_response(
+            "WEBHOOK_SECRET not configured. Set it via `wrangler secret put WEBHOOK_SECRET` before going live.",
+            status=503, code="WEBHOOK_SECRET_NOT_CONFIGURED",
+        )
+
+    # 2. Verify secret header
+    provided_secret = (
+        request.headers.get("X-Webhook-Secret")  # type: ignore[attr-defined]
+        or request.headers.get("x-webhook-secret")
+    )
+    if not verify_webhook_secret(provided_secret, expected_secret):
+        log.warn("webhook_auth_failed", provided=bool(provided_secret), ip=getattr(request, "headers", {}).get("CF-Connecting-IP", "unknown") if hasattr(request, "headers") else "unknown")
+        return error_response("Invalid or missing X-Webhook-Secret", status=401, code="WEBHOOK_AUTH_FAILED")
+
+    # 3. Parse body
+    try:
+        body_text = await request.text()  # type: ignore[attr-defined]
+        body = json.loads(body_text) if body_text else {}
+    except Exception as e:
+        return error_response(f"Invalid JSON: {e}", status=400, code="INVALID_JSON")
+
+    # 4. Process
+    result = await handle_build_complete(body, env)
+    return webhook_handler_response(result, env)

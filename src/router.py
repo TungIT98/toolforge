@@ -29,8 +29,13 @@ async def dispatch(request: "object", env: "object", ctx: "object") -> "Response
     if request.method == "OPTIONS":
         return handle_cors_preflight()
 
-    # Lazy import handlers to avoid circular deps
-    from src.handlers import health, llm, scout, version  # noqa: F401
+    # Lazy import handlers to avoid circular deps.
+    # CRITICAL: must import ALL handler modules so their @route decorators
+    # run and register routes. Missing one = endpoint 404 in production.
+    from src.handlers import (  # noqa: F401
+        admin, architect, builder, forge, health, license, llm,
+        payment, scout, store, version,
+    )
 
     url_path = request.path  # type: ignore[attr-defined]
     method = request.method  # type: ignore[attr-defined]

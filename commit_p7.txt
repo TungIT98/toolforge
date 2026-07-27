@@ -1,0 +1,31 @@
+fix(security): #7 webhook secret strict + critical router bug
+
+CRITICAL BUG FOUND + FIXED:
+- src/router.py:33 only imported 4 handler modules (health, llm, scout, version)
+- Result in PRODUCTION (CF Workers): all other endpoints returned 404
+  because their @route decorators never ran
+- Forge, builder, architect, payment, store, admin, license, scheduled
+  were all dead code in production
+
+Fix: dispatch() now imports ALL 11 handler modules explicitly.
+
+#7 Webhook security:
+- New handler: POST /api/forge/webhook/built in src/handlers/forge.py
+- Verifies X-Webhook-Secret header against env.WEBHOOK_SECRET
+- FAIL-CLOSED: if env.WEBHOOK_SECRET is empty/unset, return 503
+  (refuse to process, force owner to set the secret before going live)
+- Returns 401 on missing/wrong secret
+- GH Action workflow already passes secret as input → already wired end-to-end
+
+Tests added (9 total, 175/175 passing):
+- tests/test_webhook_security.py (7 cases): fail-closed, no secret, wrong
+  secret, valid secret, case sensitivity, empty string
+- tests/test_router.py (2 cases): catches future regression where someone
+  adds a new handler module but forgets to import in dispatch()
+
+Files changed:
+- src/router.py: import all handler modules
+- src/handlers/forge.py: add webhook_built_handler
+- wrangler.jsonc: document WEBHOOK_SECRET in comments
+- tests/test_webhook_security.py: NEW
+- tests/test_router.py: NEW

@@ -67,6 +67,7 @@
   // - META_ADS_TOKEN (P2+)
   // - TIKTOK_BUSINESS_TOKEN (P2+)
   // - SEPAY_API_KEY (P2+)
+  // - WEBHOOK_SECRET       (HMAC for /api/forge/webhook/built, REQUIRED in production)
 
   // Observability
   "observability": {
