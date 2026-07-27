@@ -1,0 +1,61 @@
+feat(helper): #5 Telegram bot — auto-reply, license send, daily report
+
+P5 Helper agent — Telegram-based customer support + owner reports.
+
+NEW: src/lib/telegram.py — Telegram Bot API client
+  - send_message, send_to_owner, set_webhook, get_me, parse_update
+  - Graceful: returns ok=False on missing token (no exceptions)
+  - Auto-handles API errors, timeouts, network failures
+
+NEW: src/helper/__init__.py — auto-reply + daily report
+  - handle_message(update, env): process Telegram Update, send reply
+    - Commands: /start, /help, /order, /license, /tools, /contact
+    - Non-command: friendly fallback (no spam replies)
+    - All replies in Vietnamese (target audience)
+  - send_license_to_customer(): called by SePay webhook after payment
+    - Sends license key to customer's Telegram if customer_telegram is numeric
+    - Skips @username (can't resolve to chat_id)
+  - daily_report(env): 22:00 Saigon daily, sends stats to owner
+    - Orders count, paid count, revenue, new licenses
+    - Error counts (error/warn) from KV monitoring log
+
+NEW: src/handlers/telegram.py — webhook endpoints
+  - POST /api/telegram/webhook  — receives Telegram Updates
+  - POST /api/telegram/setup    — register webhook URL (admin only)
+  - GET  /api/telegram/status   — check bot config (admin only)
+  - Optional TELEGRAM_WEBHOOK_SECRET for X-Telegram-Bot-Api-Secret-Token
+
+INTEGRATION:
+  - src/handlers/scheduled.py: cron 0 15 * * * now runs daily_report() (was stub)
+  - src/handlers/payment.py: sepay_webhook calls send_license_to_customer()
+    after successful license activation (best-effort, never fails webhook)
+  - src/router.py: imports telegram handler so route registers
+
+OWNER SETUP STEPS (documented in wrangler.jsonc + handler docstring):
+  1. Create bot via @BotFather, get token
+  2. wrangler secret put OWNER_TELEGRAM_BOT_TOKEN
+  3. wrangler secret put OWNER_TELEGRAM_CHAT_ID  (owner's numeric chat_id)
+  4. Optional: wrangler secret put TELEGRAM_WEBHOOK_SECRET
+  5. Call POST /api/telegram/setup with {webhook_url: "https://..."}
+  6. Talk to bot: send /start, /help, /tools
+
+Tests added (29 new, 237/237 passing):
+  - parse_update: basic, args, bot suffix, no message, non-command
+  - is_configured: missing vs env object
+  - send_message: success, not configured, API error, timeout
+  - handle_message: /start, /help, /order (found/missing/no-args), unknown, fallback
+  - send_license_to_customer: no telegram, @username skip, success
+  - daily_report: no DB, empty, with data
+  - telegram webhook: 503 not configured, 401 auth failed, 200 success
+  - status: auth required, returns bot info
+
+Files changed:
+- src/lib/telegram.py: NEW
+- src/helper/__init__.py: NEW
+- src/handlers/telegram.py: NEW
+- src/handlers/scheduled.py: wire daily_report into cron
+- src/handlers/payment.py: send_license_to_customer in webhook
+- src/router.py: import telegram handler
+- wrangler.jsonc: document new secrets
+- tests/test_helper.py: NEW (29 tests)
+- tests/test_router.py: 3 telegram routes added to critical list

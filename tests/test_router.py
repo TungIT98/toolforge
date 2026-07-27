@@ -63,6 +63,9 @@ def test_router_registers_critical_endpoints():
         ("GET", "/api/admin/builds"),
         ("GET", "/api/admin/errors"),
         ("GET", "/api/admin/error-stats"),
+        ("POST", "/api/telegram/webhook"),
+        ("POST", "/api/telegram/setup"),
+        ("GET", "/api/telegram/status"),
     ]
     missing = [(m, p) for m, p in critical if (m, p) not in registered]
     assert not missing, (

@@ -32,9 +32,11 @@ async def handle_cron(controller: "object", env: "object", ctx: "object") -> "Re
         return json_response({"ok": True, "cron": cron_str, "agent": "scout", "result": result})
 
     elif cron_str == "0 15 * * *":
-        # Helper daily 22:00 (P5+ — stub now)
-        log.info("cron_helper_daily_stub")
-        return json_response({"ok": True, "cron": cron_str, "agent": "helper", "result": {"stub": True}})
+        # Helper daily 22:00 Saigon — daily Telegram report to owner
+        from src.helper import daily_report
+        result = await daily_report(env)
+        log.info("cron_helper_done", ok=result.get("ok"), sent=result.get("sent"))
+        return json_response({"ok": True, "cron": cron_str, "agent": "helper", "result": result})
 
     elif cron_str == "0 14 * * *":
         # Hype daily 21:00 (P2+ — stub now)

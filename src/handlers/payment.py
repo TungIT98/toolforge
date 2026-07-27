@@ -241,6 +241,20 @@ async def sepay_webhook_handler(request: "object", env: "object", ctx: "object")
             status=500, code="LICENSE_ACTIVATION_FAILED"
         )
 
+    # 7b. Send license to customer via Telegram (best-effort, never fails webhook)
+    tg_send_result = None
+    try:
+        from src.helper import send_license_to_customer
+        tg_send_result = await send_license_to_customer(
+            db, env, order, license_result["license_key"],
+        )
+        if tg_send_result.get("ok"):
+            log.info("license_sent_via_telegram", order_id=order["id"])
+        else:
+            log.info("license_telegram_skipped", reason=tg_send_result.get("code"))
+    except Exception as e:
+        log.warn("telegram_send_failed_nonfatal", err=str(e))
+
     # 8. Return success to SePay
     return json_response({
         "ok": True,
@@ -248,6 +262,7 @@ async def sepay_webhook_handler(request: "object", env: "object", ctx: "object")
         "tool_id": tool_id,
         "license_key": license_result["license_key"],
         "expires_at": license_result["expires_at"],
+        "telegram_sent": tg_send_result.get("ok") if tg_send_result else False,
     })
 
 
