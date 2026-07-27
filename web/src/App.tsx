@@ -1,6 +1,7 @@
 import { Routes, Route, Link } from "react-router-dom";
 import Home from "./pages/Home";
 import ToolDetail from "./pages/ToolDetail";
+import Admin from "./pages/Admin";
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
             <Link to="/?niche=mmo_reup">MMO Reup</Link>
             <Link to="/?niche=content_creator">Content Creator</Link>
             <Link to="/?niche=productivity">Productivity</Link>
+            <Link to="/admin">Admin</Link>
           </nav>
         </div>
       </header>
@@ -19,6 +21,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/tools/:id" element={<ToolDetail />} />
+          <Route path="/admin" element={<Admin />} />
         </Routes>
       </main>
       <footer className="site-footer">

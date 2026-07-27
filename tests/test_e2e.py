@@ -218,7 +218,7 @@ class FakeD1:
             matches = [h for h in self.tables["handoff"] if h["spec_id"] == params[0]]
         elif "from specs where id" in sql_l:
             matches = [s for s in self.tables["specs"] if s["id"] == params[0]]
-        elif "from orders" in sql_l:
+        elif "from orders" in sql_l and "group by" not in sql_l:
             if "where id = ?" in sql_l:
                 matches = [o for o in self.tables["orders"] if o["id"] == params[0]]
             elif "where status = ?" in sql_l:
@@ -232,6 +232,22 @@ class FakeD1:
                 ]
             else:
                 matches = list(self.tables["orders"])
+        elif "from orders group by" in sql_l:
+            from collections import Counter
+            # Determine group-by columns from SQL
+            gb_match = _re.search(r"group by\s+(.*?)(?:\s+order by|$)", sql_l)
+            if gb_match:
+                gb_cols = [c.strip() for c in gb_match.group(1).split(",")]
+            else:
+                gb_cols = ["status"]
+            groups = Counter()
+            for o in self.tables["orders"]:
+                key = tuple(o.get(c, "") for c in gb_cols) + (o.get("amount_vnd", 0),)
+                groups[key] += 1
+            return [
+                {**{c: k[i] for i, c in enumerate(gb_cols)}, "amount_vnd": k[-1], "n": v}
+                for k, v in groups.items()
+            ]
         elif "from licenses where key" in sql_l:
             matches = [l for l in self.tables["licenses"] if l["key"] == params[0]]
         elif "from tools" in sql_l and "group by" not in sql_l:
@@ -310,12 +326,21 @@ class FakeD1:
                 matches = [b for b in self.tables["builds"] if b.get("tool_id") == params[0]]
             else:
                 matches = list(self.tables["builds"])
-        elif "from licenses" in sql_l:
+        elif "from licenses" in sql_l and "group by" not in sql_l:
             if "where tool_id = ?" in sql_l and "count(*)" in sql_l:
                 n = sum(1 for l in self.tables["licenses"]
                        if l.get("tool_id") == params[0] and l.get("status") == "active")
                 return {"n": n} if single else [{"n": n}]
             matches = list(self.tables["licenses"])
+        elif "from licenses group by" in sql_l:
+            from collections import Counter
+            gb_match = _re.search(r"group by\s+(.*?)(?:\s+order by|$)", sql_l)
+            gb_cols = [c.strip() for c in gb_match.group(1).split(",")] if gb_match else ["status"]
+            groups = Counter()
+            for lic in self.tables["licenses"]:
+                key = tuple(lic.get(c, "") for c in gb_cols)
+                groups[key] += 1
+            return [{**{c: k[i] for i, c in enumerate(gb_cols)}, "n": v} for k, v in groups.items()]
         elif "from tools group by" in sql_l:
             # Real groupby on tools table
             from collections import Counter

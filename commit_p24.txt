@@ -1,0 +1,42 @@
+feat(p2.4): Admin dashboard (backend + frontend)
+
+P2.4 deliverables (Admin Dashboard):
+- src/admin/overview.py: get_admin_overview() with aggregated stats
+  - tools: total, by_niche, by_status, live/draft
+  - orders: total, by status, total_revenue_vnd
+  - licenses: total, by status
+  - pipeline: pending_specs/pending_handoffs/in_progress_builds/done_builds
+  - scout: briefs_count, latest_brief_date
+  - llm: total_calls, total_tokens
+- src/admin/auth.py: simple API key check (X-Admin-Key header, constant-time)
+- src/handlers/admin.py: 6 HTTP endpoints
+  - GET  api admin overview       Aggregated stats
+  - GET  api admin orders         List orders (filter ?status=)
+  - GET  api admin licenses       List licenses (filter ?status=)
+  - GET  api admin pending-specs  Specs awaiting review
+  - GET  api admin briefs         Recent Scout briefs
+  - GET  api admin builds         Recent Forge builds
+  All require X-Admin-Key header (set via wrangler secret put ADMIN_API_KEY)
+
+Frontend:
+- web/src/pages/Admin.tsx: tabbed dashboard
+  - Login screen (admin key input)
+  - 6 tabs: Overview / Orders / Licenses / Specs / Briefs / Builds
+  - Tabs: Table views for orders/licenses/builds, card views for specs/briefs
+  - Stats bar on overview tab
+  - localStorage for admin key (clears on 401)
+
+- web/src/App.tsx: added Admin route + nav link
+
+Tests: 111 passed locally (was 106, plus 5 new)
+- test_admin.py: 5 tests (auth + overview with data)
+
+Auth flow:
+1. Owner sets ADMIN_API_KEY via `wrangler secret put ADMIN_API_KEY`
+2. Frontend user enters key on /admin
+3. localStorage stores key
+4. All admin requests send X-Admin-Key header
+5. Worker validates with hmac.compare_digest (constant-time)
+6. 401 → frontend clears key + redirects to login
+
+Next: P3 Builder Tool (external product for users)
