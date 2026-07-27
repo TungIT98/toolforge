@@ -19,6 +19,7 @@ Response:
 """
 from __future__ import annotations
 
+from src.handlers.middleware import apply_rate_limit
 from src.lib.log import get_logger
 from src.lib.response import error_response, json_response
 from src.llm import LLMError, get_client
@@ -30,6 +31,11 @@ log = get_logger("llm.test")
 @route("POST", "/api/llm/test")
 async def llm_test_handler(request: "object", env: "object", ctx: "object") -> "Response":
     """Test LLM connectivity. Logs token usage to D1 if available."""
+    # Rate limit (10 req/min for LLM endpoint)
+    blocked = await apply_rate_limit(request, env, "/api/llm/test")
+    if blocked:
+        return blocked
+
     # Parse body (optional)
     custom_prompt: str | None = None
     custom_system: str | None = None

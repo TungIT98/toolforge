@@ -31,6 +31,7 @@ from src.forge.r2_uploader import (
     is_valid_r2_config,
 )
 from src.forge.webhook import handle_build_complete, verify_webhook_secret
+from src.handlers.middleware import apply_rate_limit
 from src.lib.log import get_logger
 from src.lib.response import error_response, json_response
 from src.llm import LLMError, get_client
@@ -186,6 +187,11 @@ async def forge_build_handler(request: "object", env: "object", ctx: "object") -
 
     Request body: { "spec_id": "spec-..." }
     """
+    # Rate limit (10 req/min — LLM call)
+    blocked = await apply_rate_limit(request, env, "/api/forge/build")
+    if blocked:
+        return blocked
+
     try:
         body = await request.json()  # type: ignore[attr-defined]
     except Exception as e:
@@ -212,6 +218,11 @@ async def forge_license_handler(request: "object", env: "object", ctx: "object")
 
     Request body: { "tool_id": "capcut-reup", "customer_email": "optional", "customer_telegram": "optional" }
     """
+    # Rate limit (10 req/min — license gen is sensitive)
+    blocked = await apply_rate_limit(request, env, "/api/forge/license")
+    if blocked:
+        return blocked
+
     try:
         body = await request.json()  # type: ignore[attr-defined]
     except Exception as e:

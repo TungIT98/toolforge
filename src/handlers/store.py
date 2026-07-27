@@ -10,6 +10,7 @@ Endpoints:
 """
 from __future__ import annotations
 
+from src.handlers.middleware import apply_rate_limit
 from src.lib.log import get_logger
 from src.lib.response import error_response, json_response
 from src.router import route
@@ -150,6 +151,11 @@ async def store_update_handler(request: "object", env: "object", ctx: "object") 
 @route("POST", "/api/store/seed")
 async def store_seed_handler(request: "object", env: "object", ctx: "object") -> "Response":
     """First-time seed: insert SEED_TOOLS into D1. Idempotent (skips existing)."""
+    # Rate limit (5 req/min — owner only, prevent abuse)
+    blocked = await apply_rate_limit(request, env, "/api/store/seed")
+    if blocked:
+        return blocked
+
     db = getattr(env, "DB", None)
     if db is None:
         return error_response("D1 not bound", status=500, code="DB_NOT_BOUND")

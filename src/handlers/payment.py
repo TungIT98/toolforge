@@ -22,6 +22,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 
+from src.handlers.middleware import apply_rate_limit
 from src.lib.log import get_logger
 from src.lib.response import error_response, json_response
 from src.payment.license_activator import activate_license_for_order, log_payment_event
@@ -49,6 +50,11 @@ async def create_order_handler(request: "object", env: "object", ctx: "object") 
         "description": "optional note"          // optional
     }
     """
+    # Rate limit (30 req/min)
+    blocked = await apply_rate_limit(request, env, "/api/payment/orders")
+    if blocked:
+        return blocked
+
     try:
         body = await request.json()  # type: ignore[attr-defined]
     except Exception as e:
@@ -136,6 +142,11 @@ async def sepay_webhook_handler(request: "object", env: "object", ctx: "object")
     - Generate license + save
     - Return 200 to acknowledge
     """
+    # Rate limit (100 req/min — SePay can retry on transient errors)
+    blocked = await apply_rate_limit(request, env, "/api/payment/sepay-webhook")
+    if blocked:
+        return blocked
+
     db = getattr(env, "DB", None)
     if db is None:
         return error_response("D1 not bound", status=500, code="DB_NOT_BOUND")
@@ -249,6 +260,11 @@ async def test_payment_handler(request: "object", env: "object", ctx: "object") 
         "order_id": "order-..."
     }
     """
+    # Rate limit (10 req/min — owner only)
+    blocked = await apply_rate_limit(request, env, "/api/payment/test")
+    if blocked:
+        return blocked
+
     try:
         body = await request.json()  # type: ignore[attr-defined]
     except Exception as e:

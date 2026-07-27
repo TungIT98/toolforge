@@ -14,6 +14,7 @@ import uuid
 from datetime import datetime, timezone
 
 from src.architect.spec_generator import generate_spec, validate_spec
+from src.handlers.middleware import apply_rate_limit
 from src.lib.log import get_logger
 from src.lib.response import error_response, json_response
 from src.llm import LLMError, get_client
@@ -141,6 +142,11 @@ async def architect_spec_handler(request: "object", env: "object", ctx: "object"
         "category": "auto"  // optional
     }
     """
+    # Rate limit (10 req/min — LLM call)
+    blocked = await apply_rate_limit(request, env, "/api/architect/spec")
+    if blocked:
+        return blocked
+
     try:
         body = await request.json()  # type: ignore[attr-defined]
     except Exception as e:

@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
+from src.handlers.middleware import apply_rate_limit
 from src.lib.log import get_logger
 from src.lib.response import error_response, json_response
 from src.llm import LLMError, get_client
@@ -158,6 +159,11 @@ async def scout_run_handler(request: "object", env: "object", ctx: "object") -> 
     }
     If no manual_data, Scout will use Tavily API (if TAVILY_API_KEY set).
     """
+    # Rate limit (5 req/min — expensive LLM + Tavily)
+    blocked = await apply_rate_limit(request, env, "/api/scout/run")
+    if blocked:
+        return blocked
+
     manual_data: dict | None = None
     try:
         if request.headers.get("content-type", "").startswith("application/json"):  # type: ignore[attr-defined]

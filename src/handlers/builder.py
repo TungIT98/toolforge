@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from src.builder.chat import chat_with_user, create_chat_session, get_session
 from src.builder.generator import generate_code_from_spec
 from src.forge.code_generator import validate_code_files
+from src.handlers.middleware import apply_rate_limit
 from src.lib.log import get_logger
 from src.lib.response import error_response, json_response
 from src.llm import LLMError, get_client
@@ -29,6 +30,11 @@ log = get_logger("builder")
 @route("POST", "/api/builder/session")
 async def create_session_handler(request: "object", env: "object", ctx: "object") -> "Response":
     """Create new chat session."""
+    # Rate limit (30 req/min — chat is generous)
+    blocked = await apply_rate_limit(request, env, "/api/builder/session")
+    if blocked:
+        return blocked
+
     db = getattr(env, "DB", None)
     if db is None:
         return error_response("D1 not bound", status=500, code="DB_NOT_BOUND")
@@ -51,6 +57,11 @@ async def create_session_handler(request: "object", env: "object", ctx: "object"
 @route("POST", "/api/builder/session/{session_id}/message")
 async def session_message_handler(request: "object", env: "object", ctx: "object") -> "Response":
     """Send user message → AI response. May mark session ready_to_build."""
+    # Rate limit (60 req/min — chat needs higher)
+    blocked = await apply_rate_limit(request, env, "/api/builder/session/{session_id}/message")
+    if blocked:
+        return blocked
+
     db = getattr(env, "DB", None)
     if db is None:
         return error_response("D1 not bound", status=500, code="DB_NOT_BOUND")
@@ -98,6 +109,11 @@ async def get_session_handler(request: "object", env: "object", ctx: "object") -
 @route("POST", "/api/builder/session/{session_id}/build")
 async def build_session_handler(request: "object", env: "object", ctx: "object") -> "Response":
     """Generate code from a ready session."""
+    # Rate limit (10 req/min — build is LLM expensive)
+    blocked = await apply_rate_limit(request, env, "/api/builder/session/{session_id}/build")
+    if blocked:
+        return blocked
+
     db = getattr(env, "DB", None)
     if db is None:
         return error_response("D1 not bound", status=500, code="DB_NOT_BOUND")
