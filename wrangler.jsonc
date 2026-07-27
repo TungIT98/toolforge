@@ -1,0 +1,75 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "toolforge-api",
+  "main": "src/worker.py",
+  "compatibility_date": "2025-07-01",
+  "compatibility_flags": ["python_workers"],
+  "workers_dev": true,
+
+  // LLM Provider config (non-secret)
+  "vars": {
+    "ENVIRONMENT": "development",
+    "LLM_PROVIDER": "minimax",
+    "LLM_BASE_URL": "https://api.minimaxi.com/anthropic",
+    "LLM_MODEL": "minimax/MiniMax-M3",
+    "TOOLFORGE_VERSION": "0.1.0-p0",
+    "OWNER_TELEGRAM_CHAT_ID": "",  // Set via wrangler secret put
+  },
+
+  // D1 database binding
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "toolforge-db",
+      "database_id": "REPLACE_AFTER_WRANGLER_CREATE",  // Updated by `wrangler d1 create`
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // R2 bucket for tool binaries
+  "r2_buckets": [
+    {
+      "binding": "TOOLS_BUCKET",
+      "bucket_name": "toolforge-tools"
+    }
+  ],
+
+  // KV namespace for session/cache
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "REPLACE_AFTER_WRANGLER_KV_CREATE"
+    }
+  ],
+
+  // Cron Triggers (5 max free tier)
+  // - Scout daily 06:00 Asia/Saigon (= 23:00 UTC previous day)
+  // - Helper daily report 22:00 Asia/Saigon (= 15:00 UTC)
+  // - Hype daily ads report 21:00 Asia/Saigon (= 14:00 UTC)
+  // - Architect stale handoff check every 2h
+  // - Forge approved handoff check every 1h
+  "triggers": {
+    "crons": [
+      "0 23 * * *",  // Scout daily 06:00 Asia/Saigon
+      "0 15 * * *",  // Helper daily report 22:00 Asia/Saigon
+      "0 14 * * *"   // Hype daily ads report 21:00 Asia/Saigon
+    ]
+  },
+
+  // Secrets (set via `wrangler secret put`):
+  // - LLM_API_KEY          (MiniMax M3 key)
+  // - OWNER_TELEGRAM_BOT_TOKEN
+  // - META_ADS_TOKEN (P2+)
+  // - TIKTOK_BUSINESS_TOKEN (P2+)
+  // - SEPAY_API_KEY (P2+)
+
+  // Observability
+  "observability": {
+    "enabled": true
+  },
+
+  // Limits
+  "limits": {
+    "cpu_ms": 30
+  }
+}
