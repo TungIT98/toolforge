@@ -1,0 +1,9 @@
+target/
+gen/
+WixTools/
+*.pdb
+*.dll
+*.exe
+*.lib
+*.obj
+*.o

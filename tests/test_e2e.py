@@ -213,6 +213,27 @@ class FakeD1:
                             if param_idx < len(params) - 1:
                                 t[k] = params[param_idx]
                             param_idx += 1
+        elif sql_l.startswith("update builds"):
+            build_id = params[-1]
+            for b in self.tables["builds"]:
+                if b["id"] == build_id:
+                    set_part = sql_l.split("set")[1].split("where")[0]
+                    clauses = [c.strip() for c in set_part.split(",") if "=" in c]
+                    param_idx = 0
+                    for clause in clauses:
+                        if "?" not in clause:
+                            k, v = clause.split("=", 1)
+                            k = k.strip()
+                            v_stripped = v.strip()
+                            if (v_stripped.startswith("'") and v_stripped.endswith("'")) or \
+                               (v_stripped.startswith('"') and v_stripped.endswith('"')) or \
+                               v_stripped.replace("-", "").replace(".", "").isdigit():
+                                b[k] = v_stripped.strip("'\"").strip()
+                        else:
+                            k = clause.split("=")[0].strip()
+                            if param_idx < len(params) - 1:
+                                b[k] = params[param_idx]
+                            param_idx += 1
         elif sql_l.startswith("insert or replace into briefs"):
             row = {
                 "id": params[0], "scout_date": params[1], "content": params[2],
@@ -250,18 +271,27 @@ class FakeD1:
             self.tables["builds"].append(row)
         elif sql_l.startswith("update handoff"):
             status = params[0]
-            spec_id = params[-1]
+            last = params[-1]
+            target = None
             for h in self.tables["handoff"]:
-                if h["spec_id"] == spec_id:
-                    h["status"] = status
-                    if len(params) >= 2 and params[1] is not None:
-                        h["owner_feedback"] = params[1]
-                    if len(params) >= 3 and params[2] is not None:
-                        h["approved_at"] = params[2]
-                    if len(params) >= 4 and params[3] is not None:
-                        h["forge_handoff_at"] = params[3]
-                    if len(params) >= 5 and params[4] is not None:
-                        h["done_at"] = params[4]
+                if "where spec_id" in sql_l and h.get("spec_id") == last:
+                    target = h
+                    break
+                if "where id" in sql_l and h.get("id") == last:
+                    target = h
+                    break
+            if target is None:
+                pass  # no match, skip
+            else:
+                target["status"] = status
+                if len(params) >= 2 and params[1] is not None:
+                    target["owner_feedback"] = params[1]
+                if len(params) >= 3 and params[2] is not None:
+                    target["approved_at"] = params[2]
+                if len(params) >= 4 and params[3] is not None:
+                    target["forge_handoff_at"] = params[3]
+                if len(params) >= 5 and params[4] is not None:
+                    target["done_at"] = params[4]
         elif sql_l.startswith("update specs"):
             status = params[0]
             spec_id = params[-1]

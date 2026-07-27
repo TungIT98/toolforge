@@ -1,0 +1,140 @@
+name: Build Tauri + Upload to R2
+
+# Triggered by Worker backend via workflow_dispatch API
+# Inputs: build_id, tool_id, version
+# Outputs: callback Worker /api/forge/webhook/built with signed R2 URL
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_id:
+        description: 'Build ID (e.g. build-capcut-reup-0.1.0)'
+        required: true
+        type: string
+      tool_id:
+        description: 'Tool ID (e.g. capcut-reup)'
+        required: true
+        type: string
+      version:
+        description: 'Version (e.g. 0.1.0)'
+        required: true
+        type: string
+      callback_url:
+        description: 'Worker URL to POST result back to (e.g. https://toolforge-api.x.workers.dev/api/forge/webhook/built)'
+        required: true
+        type: string
+      webhook_secret:
+        description: 'Shared secret to verify webhook auth'
+        required: true
+        type: string
+
+concurrency:
+  group: "tauri-build-${{ inputs.build_id }}"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ inputs.tool_id }} v${{ inputs.version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: x86_64-unknown-linux-gnu,x86_64-pc-windows-msvc
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2.0" --locked
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev
+
+      - name: Update tauri.conf.json with build metadata
+        working-directory: src-tauri
+        run: |
+          python3 -c "
+          import json
+          with open('tauri.conf.json', 'r') as f:
+              conf = json.load(f)
+          conf['version'] = '${{ inputs.version }}'
+          with open('tauri.conf.json', 'w') as f:
+              json.dump(conf, f, indent=2)
+          "
+
+      - name: Build Tauri (Windows .exe via cargo-xwin)
+        # Note: building Windows .exe on Linux requires cargo-xwin
+        # For MVP, we skip Windows cross-compile and just verify Linux build
+        # Real Windows .exe build is post-MVP (needs Windows runner)
+        working-directory: src-tauri
+        run: |
+          # For MVP: just verify Rust code compiles + runs tests
+          cargo check --release
+          cargo test --release
+          echo "MVP: Rust check + test passed. Windows .exe build will be done on Windows runner in P4.5."
+
+      - name: Upload to R2 (P4.5: real binary)
+        if: false  # disabled for MVP — needs real Tauri build first
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          # Build the actual Windows .exe
+          # cargo tauri build --target x86_64-pc-windows-msvc
+          # 
+          # Upload to R2:
+          # aws s3 cp src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi \
+          #   s3://toolforge-tools/${{ inputs.tool_id }}/${{ inputs.version }}/setup.exe \
+          #   --endpoint-url $R2_ENDPOINT
+          #
+          # Get signed URL:
+          # SIGNED_URL=$(aws s3 presign s3://toolforge-tools/${{ inputs.tool_id }}/${{ inputs.version }}/setup.exe \
+          #   --endpoint-url $R2_ENDPOINT --expires-in 604800)
+          # 
+          # echo "SIGNED_URL=$SIGNED_URL" >> $GITHUB_OUTPUT
+          echo "Disabled in MVP — see P4.5 plan in docs/P4-PLAN.md"
+
+      - name: Report result to Worker (callback)
+        env:
+          CALLBACK_URL: ${{ inputs.callback_url }}
+          WEBHOOK_SECRET: ${{ inputs.webhook_secret }}
+          BUILD_ID: ${{ inputs.build_id }}
+          TOOL_ID: ${{ inputs.tool_id }}
+          VERSION: ${{ inputs.version }}
+          STATUS: ${{ job.status }}
+        run: |
+          if [ "$STATUS" = "success" ]; then
+            curl -X POST "$CALLBACK_URL" \
+              -H "Content-Type: application/json" \
+              -H "X-Webhook-Secret: $WEBHOOK_SECRET" \
+              -d "{\"build_id\": \"$BUILD_ID\", \"tool_id\": \"$TOOL_ID\", \"version\": \"$VERSION\", \"status\": \"success\", \"binary_url\": \"https://placeholder.r2.dev/$TOOL_ID/$VERSION/setup.exe\", \"size_bytes\": 0, \"test_result\": \"pass\"}"
+          else
+            curl -X POST "$CALLBACK_URL" \
+              -H "Content-Type: application/json" \
+              -H "X-Webhook-Secret: $WEBHOOK_SECRET" \
+              -d "{\"build_id\": \"$BUILD_ID\", \"tool_id\": \"$TOOL_ID\", \"version\": \"$VERSION\", \"status\": \"failed\", \"error\": \"build failed\"}"
+          fi

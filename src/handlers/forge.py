@@ -1,26 +1,36 @@
-"""Forge handlers — P1 implementation.
+"""Forge handlers — P1 + P4 implementation.
 
-P1 scope: generate code from approved spec, save to D1.
-P2+: actual Tauri build (needs local Rust + Windows env or GH Action).
-P4+: upload to R2, generate signed URL, license key.
+P1: generate code from approved spec, save to D1.
+P4: trigger GH Action for Tauri build, handle webhook callback.
 
 Endpoints:
-  POST /api/forge/build        Generate code from approved spec
-  POST /api/forge/license      Generate license key for a tool
-  GET  /api/forge/list         List builds
-  GET  /api/forge/get          Get 1 build by id
+  POST /api/forge/build         Generate code from approved spec (P1)
+  POST /api/forge/build-binary  Trigger Tauri build via GH Action (P4)
+  POST /api/forge/webhook/built Handle GH Action callback (P4)
+  GET  /api/forge/download/{id} Get signed download URL (P4)
+  POST /api/forge/license       Generate license key
+  GET  /api/forge/list          List builds
+  GET  /api/forge/get           Get 1 build by id
 """
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 
+from src.forge.build_orchestrator import trigger_github_workflow
 from src.forge.code_generator import (
     compile_check_python,
     generate_code_from_spec,
     validate_code_files,
 )
 from src.forge.license import generate_license_key
+from src.forge.r2_uploader import (
+    build_r2_path,
+    generate_signed_url,
+    is_valid_r2_config,
+)
+from src.forge.webhook import handle_build_complete, verify_webhook_secret
 from src.lib.log import get_logger
 from src.lib.response import error_response, json_response
 from src.llm import LLMError, get_client

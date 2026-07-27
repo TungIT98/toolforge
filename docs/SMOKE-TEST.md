@@ -188,7 +188,97 @@ curl https://toolforge-api.<email-prefix>.workers.dev/api/admin/overview \
 ```
 **Expected**: `{"ok": true, "overview": {"tools": {...}, "orders": {...}, ...}}`
 
-## 4. P3 — Builder Tool (User-facing)
+## 3.7. Create order
+```bash
+curl -X POST https://toolforge-api.<email-prefix>.workers.dev/api/payment/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool_id": "capcut-desktop-reup",
+    "customer_email": "test@example.com"
+  }'
+```
+**Expected**: `{"ok": true, "order_id": "order-...", "amount_vnd": 1000000, "payment_info": {"qr_url": "https://qr.sepay.vn/..."}}`
+
+### 3.8. Test payment (no real SePay)
+```bash
+# Dùng order_id từ step 3.7
+curl -X POST https://toolforge-api.<email-prefix>.workers.dev/api/payment/test \
+  -H "Content-Type: application/json" \
+  -d '{"order_id": "order-..."}'
+```
+**Expected**: `{"ok": true, "license_key": "XXXX-XXXX-XXXX-XXXX", "test_mode": true}`
+
+### 3.9. List orders
+```bash
+curl https://toolforge-api.<email-prefix>.workers.dev/api/payment/orders
+```
+**Expected**: list of orders
+
+### 3.10. Admin overview (X-Admin-Key required)
+```bash
+curl https://toolforge-api.<email-prefix>.workers.dev/api/admin/overview \
+  -H "X-Admin-Key: <your ADMIN_API_KEY>"
+```
+**Expected**: `{"ok": true, "overview": {"tools": {...}, "orders": {...}, ...}}`
+
+## 4. P4 — Tauri Build Pipeline
+
+### 4.0. Setup (one-time)
+```bash
+# Tạo GitHub PAT với workflow scope
+# Settings → Developer settings → Personal access tokens → Fine-grained tokens
+# Repository: TungIT98/toolforge
+# Permissions: Actions (write)
+
+wrangler secret put GITHUB_TOKEN          # GitHub PAT
+wrangler secret put WEBHOOK_SECRET       # Shared secret (e.g. toolforge-webhook-2026)
+wrangler secret put R2_ACCOUNT_ID         # Cloudflare account ID
+wrangler secret put R2_ACCESS_KEY_ID      # R2 access key
+wrangler secret put R2_SECRET_ACCESS_KEY  # R2 secret key
+```
+
+### 4.1. Trigger Tauri build
+```bash
+# Sau khi P1 chạy forge/build, có build_id (vd "build-capcut-reup-0.1.0")
+curl -X POST https://toolforge-api.<email-prefix>.workers.dev/api/forge/build-binary \
+  -H "Content-Type: application/json" \
+  -d '{
+    "build_id": "build-capcut-reup-0.1.0",
+    "tool_id": "capcut-reup",
+    "version": "0.1.0"
+  }'
+```
+**Expected**: `{"ok": true, "build_id": "...", "status": "triggered", "workflow_url": "https://github.com/..."}`
+
+### 4.2. Check workflow status
+Mở workflow URL từ response. Đợi 5-10 phút. Status sẽ là:
+- ⏳ Running (Tauri build + check)
+- ✅ Success
+- ❌ Failed (xem logs)
+
+### 4.3. Webhook callback (auto)
+GH Action tự động POST về `/api/forge/webhook/built` với:
+- Header: `X-Webhook-Secret: <WEBHOOK_SECRET>`
+- Body: `{ build_id, tool_id, version, status, binary_url, size_bytes, test_result }`
+
+Verify D1 đã update:
+```bash
+curl "https://toolforge-api.<email-prefix>.workers.dev/api/forge/get?id=build-capcut-reup-0.1.0"
+```
+**Expected**: `binary_url` không rỗng, `test_result = "pass"`
+
+### 4.4. Get signed download URL
+```bash
+curl "https://toolforge-api.<email-prefix>.workers.dev/api/forge/download/build-capcut-reup-0.1.0"
+```
+**Expected**: `{"ok": true, "download_url": "https://<account>.r2.cloudflarestorage.com/.../setup.exe?...", "expires_in_seconds": 604800}`
+
+URL có thể download binary .exe trực tiếp. Valid 7 ngày.
+
+### 4.5. Verify store frontend
+Mở store, click tool → thấy "Tải xuống" button → click → download binary mới nhất.
+
+## 5. P3 — Builder Tool (User-facing)
 
 ### 4.1. Visit frontend
 Mở `https://toolforge-web.pages.dev/builder` (hoặc custom domain)
