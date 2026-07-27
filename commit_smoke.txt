@@ -1,0 +1,16 @@
+chore: smoke test plan + wrangler vars cleanup
+
+P0-P3 smoke test prep:
+- wrangler.jsonc: add 3 SePay bank vars (SEPAY_BANK_CODE, SEPAY_BANK_NAME,
+  SEPAY_ACCOUNT_NUMBER, SEPAY_ACCOUNT_HOLDER) referenced in payment.py
+  but missing from wrangler vars
+- TOOLFORGE_VERSION bumped 0.1.0-p0 -> 0.1.0-p3
+- docs/SMOKE-TEST.md: full E2E test plan P0 -> P1 -> P2 -> P3
+  - 24+ curl commands to verify each endpoint
+  - Pass criteria + troubleshooting
+  - Owner can run this after deploy to validate production
+
+Verified:
+- 126/126 tests pass
+- 38 routes registered
+- All secrets/vars consistent between code and wrangler.jsonc

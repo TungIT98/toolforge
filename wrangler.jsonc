@@ -12,8 +12,13 @@
     "LLM_PROVIDER": "minimax",
     "LLM_BASE_URL": "https://api.minimaxi.com/anthropic",
     "LLM_MODEL": "minimax/MiniMax-M3",
-    "TOOLFORGE_VERSION": "0.1.0-p0",
+    "TOOLFORGE_VERSION": "0.1.0-p3",
     "OWNER_TELEGRAM_CHAT_ID": "",  // Set via wrangler secret put
+    // SePay bank info (set via wrangler secret put in production)
+    "SEPAY_BANK_CODE": "VCB",
+    "SEPAY_BANK_NAME": "Vietcombank",
+    "SEPAY_ACCOUNT_NUMBER": "0000000000",
+    "SEPAY_ACCOUNT_HOLDER": "TOOLFORGE"
   },
 
   // D1 database binding
