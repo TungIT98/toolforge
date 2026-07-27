@@ -46,7 +46,7 @@ class FakeD1:
     def __init__(self):
         self.tables: dict[str, list[dict]] = {
             "briefs": [], "specs": [], "handoff": [], "builds": [],
-            "licenses": [], "llm_usage": [],
+            "licenses": [], "llm_usage": [], "tools": [],
         }
 
     def prepare(self, sql: str) -> FakeD1Statement:
@@ -54,7 +54,38 @@ class FakeD1:
 
     async def _execute_write(self, sql: str, params: tuple) -> dict:
         sql_l = sql.lower().strip()
-        if sql_l.startswith("insert or replace into briefs"):
+        if sql_l.startswith("insert or replace into tools") or sql_l.startswith("insert into tools"):
+            # Detect column order by parsing INSERT column list
+            try:
+                cols_part = sql_l.split("(", 1)[1].split(")")[0]
+                cols = [c.strip() for c in cols_part.split(",")]
+            except Exception:
+                cols = []
+            row = {}
+            for i, col in enumerate(cols):
+                if i < len(params):
+                    row[col] = params[i]
+            # Defaults
+            row.setdefault("build_id", None)
+            row.setdefault("pricing_vnd", 0)
+            row.setdefault("binary_url", "")
+            row.setdefault("license_required", 0)
+            row.setdefault("tags", "")
+            row.setdefault("created_at", datetime.now(timezone.utc).isoformat())
+            row.setdefault("updated_at", datetime.now(timezone.utc).isoformat())
+            self.tables["tools"] = [r for r in self.tables["tools"] if r["id"] != row["id"]]
+            self.tables["tools"].append(row)
+        elif sql_l.startswith("update tools"):
+            tool_id = params[-1]
+            for t in self.tables["tools"]:
+                if t["id"] == tool_id:
+                    set_part = sql_l.split("set")[1].split("where")[0]
+                    clauses = [c.strip() for c in set_part.split(",") if "=" in c and "?" in c]
+                    for i, clause in enumerate(clauses):
+                        col = clause.split("=")[0].strip()
+                        if i < len(params) - 1:
+                            t[col] = params[i]
+        elif sql_l.startswith("insert or replace into briefs"):
             row = {
                 "id": params[0], "scout_date": params[1], "content": params[2],
                 "top_pain_json": params[3], "severity_avg": params[4],
@@ -114,11 +145,105 @@ class FakeD1:
         return {"ok": True}
 
     async def _execute_read(self, sql: str, params: tuple, single: bool) -> Any:
+        import re as _re
         sql_l = sql.lower().strip()
         if "from handoff where spec_id" in sql_l:
             matches = [h for h in self.tables["handoff"] if h["spec_id"] == params[0]]
         elif "from specs where id" in sql_l:
             matches = [s for s in self.tables["specs"] if s["id"] == params[0]]
+        elif "from tools" in sql_l and "group by" not in sql_l:
+            # Parse WHERE clauses (support AND + OR + LIKE)
+            where_match = _re.search(r"where\s+(.*?)(?:\s+order by|\s+limit|$)", sql_l, _re.DOTALL)
+            matches = list(self.tables["tools"])
+            if where_match:
+                where_expr = where_match.group(1).strip()
+                # Strip outer parens if any
+                if where_expr.startswith("(") and where_expr.endswith(")"):
+                    where_expr = where_expr[1:-1].strip()
+                # Split by OR (top-level)
+                or_groups = _re.split(r"\s+or\s+", where_expr)
+                # For each OR group, split by AND and collect param indices
+                matched = []
+                for or_group in or_groups:
+                    and_clauses = [c.strip() for c in or_group.split(" and ")]
+                    or_matches = list(self.tables["tools"])
+                    group_matched_any = False
+                    for clause in and_clauses:
+                        col = None
+                        right = None
+                        if "=" in clause:
+                            left, right = clause.split("=", 1)
+                            col_expr = left.strip().strip("()").strip()
+                            col_expr_l = col_expr.lower()
+                            if col_expr_l.endswith(" like") or col_expr_l.endswith(" like") or " like " in col_expr_l:
+                                col = col_expr_l.replace(" like", "").strip()
+                            else:
+                                col = col_expr
+                            right = right.strip()
+                        elif " like " in clause:
+                            # LIKE without `=` (e.g. "name LIKE ?")
+                            left, right = clause.split(" like ", 1)
+                            col = left.strip().strip("()").strip()
+                            right = right.strip()
+                        if col is None or right != "?":
+                            continue
+                        where_before = where_expr.split(clause)[0]
+                        q_count = where_before.count("?")
+                        val = params[q_count] if q_count < len(params) else None
+                        if " like " in clause:
+                            if val and isinstance(val, str) and val.startswith("%") and val.endswith("%"):
+                                sub = val[1:-1].lower()
+                                or_matches = [m for m in or_matches if sub in (m.get(col, "") or "").lower()]
+                            else:
+                                or_matches = [m for m in or_matches if m.get(col) == val]
+                        else:
+                            or_matches = [m for m in or_matches if m.get(col) == val]
+                        group_matched_any = True
+                    if group_matched_any:
+                        matched.extend(or_matches)
+                # Deduplicate while preserving order
+                seen = set()
+                matches = []
+                for m in matched:
+                    mid = id(m)
+                    if mid not in seen:
+                        seen.add(mid)
+                        matches.append(m)
+            # ORDER BY
+            order_match = _re.search(r"order by\s+(\w+)\s*(asc|desc)?", sql_l)
+            if order_match:
+                col = order_match.group(1)
+                direction = (order_match.group(2) or "asc").lower()
+                reverse = direction == "desc"
+                matches = sorted(matches, key=lambda m: m.get(col) or "", reverse=reverse)
+            # LIMIT
+            limit_match = _re.search(r"limit\s+\?\s+offset\s+\?", sql_l)
+            if limit_match:
+                limit = params[-2] if len(params) >= 2 else 50
+                offset = params[-1] if len(params) >= 1 else 0
+                matches = matches[offset:offset + limit]
+        elif "from builds" in sql_l:
+            if "where tool_id = ?" in sql_l:
+                matches = [b for b in self.tables["builds"] if b.get("tool_id") == params[0]]
+            else:
+                matches = list(self.tables["builds"])
+        elif "from licenses" in sql_l:
+            if "where tool_id = ?" in sql_l and "count(*)" in sql_l:
+                n = sum(1 for l in self.tables["licenses"]
+                       if l.get("tool_id") == params[0] and l.get("status") == "active")
+                return {"n": n} if single else [{"n": n}]
+            matches = list(self.tables["licenses"])
+        elif "from tools group by" in sql_l:
+            # Real groupby on tools table
+            from collections import Counter
+            groups = Counter()
+            for t in self.tables["tools"]:
+                key = (t.get("niche", ""), t.get("status", ""), t.get("pricing_vnd", 0))
+                groups[key] += 1
+            return [
+                {"niche": k[0], "status": k[1], "pricing_vnd": k[2], "n": v}
+                for k, v in groups.items()
+            ]
         else:
             return None if single else []
         if not matches:

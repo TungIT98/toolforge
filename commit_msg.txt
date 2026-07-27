@@ -1,0 +1,42 @@
+feat(p1): Architect + Forge + E2E test pipeline
+
+P1 deliverables (Scout + Architect + Forge + E2E):
+- src/architect/spec_generator.py: LLM generate 10-section spec
+  - parse_sections: regex split markdown into 10 sections
+  - extract_effort_hours: parse X gio/ngay to hours
+  - validate_spec: check 10 sections present + non-stub
+- src/handlers/architect.py: 5 HTTP endpoints
+  - POST /api/architect/spec: pain_point to spec + handoff(pending)
+  - POST /api/architect/approve: spec to handoff(approved), triggers Forge
+  - POST /api/architect/reject: spec to handoff(rejected) with feedback
+  - GET /api/architect/list: filter by status
+  - GET /api/architect/get: 1 spec detail
+  - Priority auto-set by pain_point.severity (ge 8 = high, lt 8 = medium)
+- src/forge/code_generator.py: LLM generate code from spec
+  - parse_code_fences: extract files from code block fences
+  - validate_code_files: check file count + minimum size
+  - compile_check_python: py_compile syntax check
+- src/forge/license.py: XXXX-XXXX-XXXX-XXXX format with uuid4
+- src/handlers/forge.py: 4 HTTP endpoints
+  - POST /api/forge/build: spec_id to generate code + save build
+  - POST /api/forge/license: generate license key for tool_id
+  - GET /api/forge/list: all builds
+  - GET /api/forge/get: 1 build detail
+  - Status flow: pending to in_progress to done
+- tests/test_architect.py: 12 tests
+- tests/test_forge.py: 16 tests
+- tests/test_e2e.py: 5 tests with FakeD1 + httpx mock
+  - test_e2e_happy_path: full Scout then Architect then Approve then Forge flow
+  - 3 negative cases
+  - priority by severity
+  - avoid=true filter
+  - license format
+
+Tests: 58 passed locally (was 23, plus 35 new)
+
+Pipeline ready for owner:
+1. curl POST api scout run (with TAVILY_API_KEY or manual_data) to get brief_id
+2. Pick top pain point from brief, curl POST api architect spec to get spec_id
+3. Owner reviews spec, curl POST api architect approve
+4. curl POST api forge build to get build_id + code files
+5. (P4+) Forge uploads binary to R2 + license
