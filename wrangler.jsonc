@@ -14,6 +14,11 @@
     "LLM_MODEL": "minimax/MiniMax-M3",
     "TOOLFORGE_VERSION": "0.1.0-p3",
     "OWNER_TELEGRAM_CHAT_ID": "",  // Set via wrangler secret put
+    // CORS: comma-separated allowed origins. Empty = "*" (dev only).
+    // Examples:
+    //   "https://toolforge.vn"  (single)
+    //   "https://toolforge.vn,https://admin.toolforge.vn"  (multiple)
+    "ALLOWED_ORIGINS": "",
     // SePay bank info (set via wrangler secret put in production)
     "SEPAY_BANK_CODE": "VCB",
     "SEPAY_BANK_NAME": "Vietcombank",

@@ -1,0 +1,34 @@
+feat(cors): #2 replace wildcard * with env-configured ALLOWED_ORIGINS
+
+Problem:
+- Hard-coded Access-Control-Allow-Origin: * in json_response and preflight
+- When frontend adds auth cookies, browser will block anyway (creds not allowed with *)
+- But wildcard allows any origin to read API responses from anywhere (data exfil risk)
+
+Fix:
+- New module-level state _allowed_origins: list[str] in src/lib/response.py
+- configure_cors(env=env) reads ALLOWED_ORIGINS from env (comma-separated)
+- Empty config → '*' (dev mode, backward compatible)
+- Non-empty + matching Origin header → that specific origin
+- Non-empty + no match → empty (browser blocks)
+- Added X-Webhook-Secret to Access-Control-Allow-Headers
+- Added Vary: Origin when specific origin is used (cache safety)
+- dispatch() calls configure_cors(env=env) at every request start
+
+Tests added (11 new, 186/186 passing):
+- Default wildcard
+- Empty config stays wildcard
+- Single origin match / no match
+- Multiple origins
+- Whitespace stripping
+- Preflight headers
+- Vary: Origin added for specific origin
+- X-Webhook-Secret in allowed headers
+- configure_cors reads from env object
+- No Origin header with allowlist blocks
+
+Files changed:
+- src/lib/response.py: full rewrite with CORS config
+- src/router.py: call configure_cors at request start, pass request to preflight
+- wrangler.jsonc: document ALLOWED_ORIGINS in vars
+- tests/test_response.py: expanded with 11 CORS tests

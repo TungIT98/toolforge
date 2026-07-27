@@ -26,8 +26,12 @@ def route(method: str, path: str) -> Callable[[Handler], Handler]:
 
 async def dispatch(request: "object", env: "object", ctx: "object") -> "Response":
     """Main router: match method+path to handler, else 404."""
+    # Configure CORS at request start so all response helpers use the right policy
+    from src.lib.response import configure_cors
+    configure_cors(env=env)
+
     if request.method == "OPTIONS":
-        return handle_cors_preflight()
+        return handle_cors_preflight(request)
 
     # Lazy import handlers to avoid circular deps.
     # CRITICAL: must import ALL handler modules so their @route decorators
