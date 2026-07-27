@@ -47,6 +47,7 @@ class FakeD1:
         self.tables: dict[str, list[dict]] = {
             "briefs": [], "specs": [], "handoff": [], "builds": [],
             "licenses": [], "llm_usage": [], "tools": [],
+            "orders": [], "payment_events": [],
         }
 
     def prepare(self, sql: str) -> FakeD1Statement:
@@ -54,7 +55,65 @@ class FakeD1:
 
     async def _execute_write(self, sql: str, params: tuple) -> dict:
         sql_l = sql.lower().strip()
-        if sql_l.startswith("insert or replace into tools") or sql_l.startswith("insert into tools"):
+        if sql_l.startswith("insert into orders") or sql_l.startswith("insert or replace into orders"):
+            try:
+                cols_part = sql_l.split("(", 1)[1].split(")")[0]
+                cols = [c.strip() for c in cols_part.split(",")]
+            except Exception:
+                cols = []
+            row = {}
+            for i, col in enumerate(cols):
+                if i < len(params):
+                    row[col] = params[i]
+            row.setdefault("status", "pending")
+            row.setdefault("created_at", datetime.now(timezone.utc).isoformat())
+            row.setdefault("updated_at", datetime.now(timezone.utc).isoformat())
+            self.tables["orders"] = [r for r in self.tables["orders"] if r["id"] != row["id"]]
+            self.tables["orders"].append(row)
+        elif sql_l.startswith("update orders"):
+            order_id = params[-1]
+            for o in self.tables["orders"]:
+                if o["id"] == order_id:
+                    set_part = sql_l.split("set")[1].split("where")[0]
+                    clauses = [c.strip() for c in set_part.split(",") if "=" in c]
+                    param_idx = 0
+                    for clause in clauses:
+                        if "?" not in clause:
+                            # Literal value
+                            k, v = clause.split("=", 1)
+                            k = k.strip()
+                            v = v.strip().strip("'").strip('"')
+                            o[k] = v
+                        else:
+                            k = clause.split("=")[0].strip()
+                            if param_idx < len(params) - 1:
+                                o[k] = params[param_idx]
+                            param_idx += 1
+        elif sql_l.startswith("insert into payment_events") or sql_l.startswith("insert or replace into payment_events"):
+            try:
+                cols_part = sql_l.split("(", 1)[1].split(")")[0]
+                cols = [c.strip() for c in cols_part.split(",")]
+            except Exception:
+                cols = []
+            row = {}
+            for i, col in enumerate(cols):
+                if i < len(params):
+                    row[col] = params[i]
+            self.tables["payment_events"].append(row)
+        elif sql_l.startswith("insert into licenses") or sql_l.startswith("insert or replace into licenses"):
+            try:
+                cols_part = sql_l.split("(", 1)[1].split(")")[0]
+                cols = [c.strip() for c in cols_part.split(",")]
+            except Exception:
+                cols = []
+            row = {}
+            for i, col in enumerate(cols):
+                if i < len(params):
+                    row[col] = params[i]
+            row.setdefault("status", "active")
+            self.tables["licenses"] = [r for r in self.tables["licenses"] if r["key"] != row["key"]]
+            self.tables["licenses"].append(row)
+        elif sql_l.startswith("insert or replace into tools") or sql_l.startswith("insert into tools"):
             # Detect column order by parsing INSERT column list
             try:
                 cols_part = sql_l.split("(", 1)[1].split(")")[0]
@@ -80,11 +139,19 @@ class FakeD1:
             for t in self.tables["tools"]:
                 if t["id"] == tool_id:
                     set_part = sql_l.split("set")[1].split("where")[0]
-                    clauses = [c.strip() for c in set_part.split(",") if "=" in c and "?" in c]
-                    for i, clause in enumerate(clauses):
-                        col = clause.split("=")[0].strip()
-                        if i < len(params) - 1:
-                            t[col] = params[i]
+                    clauses = [c.strip() for c in set_part.split(",") if "=" in c]
+                    param_idx = 0
+                    for clause in clauses:
+                        if "?" not in clause:
+                            k, v = clause.split("=", 1)
+                            k = k.strip()
+                            v = v.strip().strip("'").strip('"')
+                            t[k] = v
+                        else:
+                            k = clause.split("=")[0].strip()
+                            if param_idx < len(params) - 1:
+                                t[k] = params[param_idx]
+                            param_idx += 1
         elif sql_l.startswith("insert or replace into briefs"):
             row = {
                 "id": params[0], "scout_date": params[1], "content": params[2],
@@ -151,6 +218,22 @@ class FakeD1:
             matches = [h for h in self.tables["handoff"] if h["spec_id"] == params[0]]
         elif "from specs where id" in sql_l:
             matches = [s for s in self.tables["specs"] if s["id"] == params[0]]
+        elif "from orders" in sql_l:
+            if "where id = ?" in sql_l:
+                matches = [o for o in self.tables["orders"] if o["id"] == params[0]]
+            elif "where status = ?" in sql_l:
+                matches = [o for o in self.tables["orders"] if o.get("status") == params[0]]
+            elif "where tool_id = ? and status = ?" in sql_l and "amount_vnd" in sql_l:
+                matches = [
+                    o for o in self.tables["orders"]
+                    if o.get("tool_id") == params[0]
+                    and o.get("status") == params[1]
+                    and o.get("amount_vnd") == params[2]
+                ]
+            else:
+                matches = list(self.tables["orders"])
+        elif "from licenses where key" in sql_l:
+            matches = [l for l in self.tables["licenses"] if l["key"] == params[0]]
         elif "from tools" in sql_l and "group by" not in sql_l:
             # Parse WHERE clauses (support AND + OR + LIKE)
             where_match = _re.search(r"where\s+(.*?)(?:\s+order by|\s+limit|$)", sql_l, _re.DOTALL)

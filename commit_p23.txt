@@ -1,0 +1,42 @@
+feat(p2.3): SePay webhook + license auto-activation
+
+P2.3 deliverables (Payment):
+- migrations/0002_orders.sql: orders + payment_events tables
+- src/payment/sepay.py: SePay webhook handler
+  - verify_api_key (Apikey header, constant-time compare)
+  - verify_signature (HMAC-SHA256, optional mode)
+  - parse_webhook (normalize SePay JSON)
+  - is_incoming_transfer (filter in/out)
+  - extract_order_info (parse TOOLFORGE <tool_id> <customer>)
+- src/payment/license_activator.py: generate + save license
+  - activate_license_for_order: 1-year license, save to D1
+  - log_payment_event: audit trail
+- src/handlers/payment.py: 5 HTTP endpoints
+  - POST api payment orders        Create pending order (returns VietQR URL)
+  - POST api payment sepay-webhook  SePay calls when payment received
+  - POST api payment test           Test mode (no real SePay needed)
+  - GET  api payment orders         List orders (admin)
+  - GET  api payment orders ID      Order detail
+
+Flow:
+1. User clicks Buy on frontend -> POST api payment orders
+   -> Returns order_id + payment_info (VietQR URL)
+2. User pays via bank app with exact content + amount
+3. SePay detects -> POST api payment sepay-webhook
+4. Webhook verifies Apikey + parses + matches pending order
+5. Activates license -> saves to D1
+6. User gets license key (Telegram/email integration in P5)
+
+Security:
+- Constant-time API key compare (hmac.compare_digest)
+- Audit log every webhook + activation
+- Idempotent: re-payment of same order = no-op
+- Test mode: simulate payment without real SePay
+
+Test mode endpoint: POST api payment test with {order_id}
+  -> marks order paid, generates license (for owner to test E2E)
+
+Tests: 106 passed locally (was 85, plus 21 new)
+- test_payment.py: 21 tests (verify, parse, extract, activate, full flow)
+
+Next: P2.4 Admin dashboard
