@@ -1,49 +1,46 @@
-feat(p4): Tauri build pipeline (GH Action + R2 signed URL)
+feat(monitoring): #4 request_id + critical error log to KV
 
-P4 deliverables (Tauri Build Pipeline):
-- src-tauri/: Tauri 2.x app skeleton
-  - Cargo.toml: Rust deps (tauri 2, serde, anyhow)
-  - tauri.conf.json: window, bundle config
-  - src/main.rs: entry point
-  - src/lib.rs: tauri::command handlers (get_tool_info, verify_license, ping)
-  - capabilities/default.json: default permissions
-  - .gitignore: target/, gen/
-  - README.md: customize guide
-- .github/workflows/build-tauri.yml: GH Action
-  - workflow_dispatch trigger with inputs (build_id, tool_id, version, callback_url, webhook_secret)
-  - Setup Rust + Node + Tauri CLI
-  - Linux build + test (MVP — Windows .exe in P4.5 with Windows runner)
-  - Callback POST to Worker /api/forge/webhook/built
-  - Real R2 upload planned (P4.5)
-- src/forge/build_orchestrator.py: trigger GH Action via API
-  - workflow_dispatch call with build_id, tool_id, version
-- src/forge/r2_uploader.py: R2 signed URL generator (S3 v4)
-  - generate_signed_url: 7-day expiry
-  - build_r2_path: <tool_id>/<version>/setup.exe
-- src/forge/webhook.py: GH Action callback handler
-  - verify_webhook_secret: constant-time check
-  - handle_build_complete: update builds + handoff + tools with binary URL
+Adds observability for production debugging:
 
-P4 endpoints (3 new, total 41):
-  - POST api forge build-binary      Trigger Tauri build via GH Action
-  - POST api forge webhook built     Handle GH Action callback (X-Webhook-Secret)
-  - GET  api forge download BUILD_ID  Get R2 signed download URL (7-day expiry)
+1. Request ID (X-Request-Id):
+   - Generated per request (UUID v4) in dispatch()
+   - Honored from client header if provided (capped at 64 chars)
+   - Set on every response (success + error)
+   - Available via get_request_id() for handlers to include in logs
 
-P4 secrets (5 new):
-  - GITHUB_TOKEN (GH PAT with workflow scope)
-  - WEBHOOK_SECRET (shared with GH Action)
-  - R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
+2. Critical error log to KV:
+   - log_error_to_kv() writes errors to KV with 7-day TTL
+   - Key: error:{iso_ts}:{request_id} (lex sort = chronological)
+   - Auto-truncates long errors (500) and field values (200)
+   - Worker.fetch() logs unhandled exceptions
+   - Router 404s are logged as warn
+   - NEVER raises — monitoring never breaks the request
 
-Bug fixes (test infra):
-  - FakeD1: update handoff now supports both WHERE id = ? and WHERE spec_id = ?
-  - FakeD1: update builds path added
-  - FakeD1: literal value filter (skip expressions like "messages_count + 1")
+3. Admin endpoints to view errors:
+   - GET /api/admin/errors?limit=N&severity=error|warn|info
+   - GET /api/admin/error-stats (aggregated counts by severity)
+   - Both require X-Admin-Key (existing admin auth)
 
-Tests: 141 passed locally (was 126, plus 15 new)
-- test_forge_build.py: 15 tests
-  - R2 signed URL generation
-  - Webhook secret verify
-  - Webhook payload handling (success + failure + not found)
-  - GH workflow trigger (missing token, missing secret, success, API error)
+4. dispatch() updates:
+   - Generates X-Request-Id at start
+   - Injects into all response headers
+   - Logs 404s to KV (severity=warn)
+   - Honors client-provided X-Request-Id for distributed tracing
 
-Next: P5 (Helper Telegram Bot) or P4.5 (Windows runner + real R2 upload)
+Tests added (18 monitoring + 4 admin errors, 208/208 passing):
+- Request ID generation, uniqueness, client header, capping
+- log_error_to_kv: writes, no KV, uses current rid, truncates long
+- list_recent_errors: empty, no KV, sorting, severity filter, limit cap
+- get_error_count_by_severity: aggregation
+- dispatch: adds X-Request-Id, honors client, caps long
+- /api/admin/errors: auth, returns logged, severity filter
+- /api/admin/error-stats: aggregation
+
+Files changed:
+- src/lib/monitoring.py: NEW (request_id, log_error_to_kv, list_recent_errors)
+- src/router.py: set X-Request-Id, log 404s
+- src/worker.py: log unhandled exceptions
+- src/handlers/admin.py: 2 new endpoints
+- tests/test_monitoring.py: NEW (18 tests)
+- tests/test_admin.py: expanded with 4 admin errors tests
+- tests/test_router.py: added admin error routes to critical list

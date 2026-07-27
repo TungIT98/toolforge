@@ -1,4 +1,6 @@
-"""Tests for Admin overview + auth."""
+"""Tests for Admin overview + auth + monitoring endpoints."""
+import json
+
 import pytest
 
 from src.admin.auth import check_admin_key
@@ -70,3 +72,115 @@ async def test_admin_overview_with_data():
 
     assert overview["licenses"]["total"] == 1
     assert overview["licenses"]["active_count"] == 1
+
+
+# === /api/admin/errors endpoint tests ===
+
+class _Req:
+    def __init__(self, headers=None, url=""):
+        self.headers = headers or {}
+        self.url = url
+
+
+class _KV:
+    """Minimal KV for admin errors test."""
+    def __init__(self):
+        self.store = {}
+
+    async def get(self, key, type=None):
+        v = self.store.get(key)
+        if v is None:
+            return None
+        if type == "text":
+            return v
+        try:
+            return json.loads(v)
+        except Exception:
+            return v
+
+    async def put(self, key, value, **kwargs):
+        self.store[key] = value
+
+    async def list(self, prefix="", limit=100):
+        keys = [{"name": k} for k in sorted(self.store.keys()) if k.startswith(prefix)]
+        return {"keys": keys[:limit]}
+
+
+@pytest.mark.asyncio
+async def test_admin_errors_requires_auth():
+    """No X-Admin-Key → 401."""
+    from src.handlers.admin import admin_errors_handler
+    env = FakeEnv()
+    env.CACHE = _KV()
+    req = _Req(headers={})
+    resp = await admin_errors_handler(req, env, None)
+    assert resp.status == 401
+
+
+@pytest.mark.asyncio
+async def test_admin_errors_returns_logged_errors():
+    """Logged errors are returned by /api/admin/errors."""
+    from src.handlers.admin import admin_errors_handler
+    from src.lib.monitoring import log_error_to_kv
+
+    class AdminEnv(FakeEnv):
+        ADMIN_API_KEY = "secret-key"
+
+    env = AdminEnv()
+    env.CACHE = _KV()
+    # Pre-populate KV
+    await log_error_to_kv(env, severity="error", endpoint="/api/x", error="boom", code="X", request_id="r1")
+    await log_error_to_kv(env, severity="warn", endpoint="/api/y", error="meh", code="Y", request_id="r2")
+
+    req = _Req(headers={"X-Admin-Key": "secret-key"}, url="/api/admin/errors?limit=10")
+    resp = await admin_errors_handler(req, env, None)
+    assert resp.status == 200
+    body = json.loads(resp.body)
+    assert body["ok"] is True
+    assert body["count"] == 2
+    assert {e["code"] for e in body["errors"]} == {"X", "Y"}
+
+
+@pytest.mark.asyncio
+async def test_admin_errors_severity_filter():
+    """?severity=error filters out warns."""
+    from src.handlers.admin import admin_errors_handler
+    from src.lib.monitoring import log_error_to_kv
+
+    class AdminEnv(FakeEnv):
+        ADMIN_API_KEY = "k"
+
+    env = AdminEnv()
+    env.CACHE = _KV()
+    await log_error_to_kv(env, severity="error", endpoint="/a", error="e", code="E", request_id="r1")
+    await log_error_to_kv(env, severity="warn", endpoint="/b", error="w", code="W", request_id="r2")
+
+    req = _Req(headers={"X-Admin-Key": "k"}, url="/api/admin/errors?severity=error")
+    resp = await admin_errors_handler(req, env, None)
+    body = json.loads(resp.body)
+    assert body["count"] == 1
+    assert body["errors"][0]["severity"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_admin_error_stats_aggregates():
+    """/api/admin/error-stats returns counts by severity."""
+    from src.handlers.admin import admin_error_stats_handler
+    from src.lib.monitoring import log_error_to_kv
+
+    class AdminEnv(FakeEnv):
+        ADMIN_API_KEY = "k"
+
+    env = AdminEnv()
+    env.CACHE = _KV()
+    await log_error_to_kv(env, severity="error", endpoint="/a", error="e", request_id="r1")
+    await log_error_to_kv(env, severity="error", endpoint="/b", error="e", request_id="r2")
+    await log_error_to_kv(env, severity="warn", endpoint="/c", error="w", request_id="r3")
+
+    req = _Req(headers={"X-Admin-Key": "k"})
+    resp = await admin_error_stats_handler(req, env, None)
+    assert resp.status == 200
+    body = json.loads(resp.body)
+    assert body["stats"]["error"] == 2
+    assert body["stats"]["warn"] == 1
+    assert body["total_recent"] == 3

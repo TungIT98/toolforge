@@ -55,6 +55,14 @@ def test_router_registers_critical_endpoints():
         ("POST", "/api/builder/session"),
         ("POST", "/api/builder/session/{session_id}/message"),
         ("POST", "/api/builder/session/{session_id}/build"),
+        ("GET", "/api/admin/overview"),
+        ("GET", "/api/admin/orders"),
+        ("GET", "/api/admin/licenses"),
+        ("GET", "/api/admin/pending-specs"),
+        ("GET", "/api/admin/briefs"),
+        ("GET", "/api/admin/builds"),
+        ("GET", "/api/admin/errors"),
+        ("GET", "/api/admin/error-stats"),
     ]
     missing = [(m, p) for m, p in critical if (m, p) not in registered]
     assert not missing, (
