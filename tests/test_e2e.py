@@ -48,6 +48,7 @@ class FakeD1:
             "briefs": [], "specs": [], "handoff": [], "builds": [],
             "licenses": [], "llm_usage": [], "tools": [],
             "orders": [], "payment_events": [],
+            "builder_sessions": [], "builder_messages": [], "builder_jobs": [],
         }
 
     def prepare(self, sql: str) -> FakeD1Statement:
@@ -55,7 +56,67 @@ class FakeD1:
 
     async def _execute_write(self, sql: str, params: tuple) -> dict:
         sql_l = sql.lower().strip()
-        if sql_l.startswith("insert into orders") or sql_l.startswith("insert or replace into orders"):
+        if sql_l.startswith("insert into builder_sessions") or sql_l.startswith("insert or replace into builder_sessions"):
+            try:
+                cols_part = sql_l.split("(", 1)[1].split(")")[0]
+                cols = [c.strip() for c in cols_part.split(",")]
+            except Exception:
+                cols = []
+            row = {}
+            for i, col in enumerate(cols):
+                if i < len(params):
+                    row[col] = params[i]
+            row.setdefault("status", "chatting")
+            row.setdefault("messages_count", 0)
+            row.setdefault("created_at", datetime.now(timezone.utc).isoformat())
+            row.setdefault("updated_at", datetime.now(timezone.utc).isoformat())
+            self.tables["builder_sessions"] = [r for r in self.tables["builder_sessions"] if r["id"] != row["id"]]
+            self.tables["builder_sessions"].append(row)
+        elif sql_l.startswith("update builder_sessions"):
+            session_id = params[-1]
+            for s in self.tables["builder_sessions"]:
+                if s["id"] == session_id:
+                    set_part = sql_l.split("set")[1].split("where")[0]
+                    clauses = [c.strip() for c in set_part.split(",") if "=" in c]
+                    param_idx = 0
+                    for clause in clauses:
+                        if "?" not in clause:
+                            k, v = clause.split("=", 1)
+                            v_stripped = v.strip()
+                            # Only accept literal if quoted or pure number
+                            if (v_stripped.startswith("'") and v_stripped.endswith("'")) or \
+                               (v_stripped.startswith('"') and v_stripped.endswith('"')) or \
+                               v_stripped.replace("-", "").replace(".", "").isdigit():
+                                s[k.strip()] = v_stripped.strip("'\"").strip()
+                            # else: skip expressions like "messages_count + 1"
+                        else:
+                            k = clause.split("=")[0].strip()
+                            if param_idx < len(params) - 1:
+                                s[k] = params[param_idx]
+                            param_idx += 1
+        elif sql_l.startswith("insert into builder_messages"):
+            self.tables["builder_messages"].append({
+                "session_id": params[0], "role": params[1],
+                "content": params[2], "ts": params[3] if len(params) > 3 else datetime.now(timezone.utc).isoformat(),
+            })
+        elif sql_l.startswith("insert into builder_jobs") or sql_l.startswith("insert or replace into builder_jobs"):
+            try:
+                cols_part = sql_l.split("(", 1)[1].split(")")[0]
+                cols = [c.strip() for c in cols_part.split(",")]
+            except Exception:
+                cols = []
+            row = {}
+            for i, col in enumerate(cols):
+                if i < len(params):
+                    row[col] = params[i]
+            row.setdefault("status", "done")
+            row.setdefault("file_count", 0)
+            row.setdefault("total_lines", 0)
+            row.setdefault("size_bytes", 0)
+            row.setdefault("created_at", datetime.now(timezone.utc).isoformat())
+            self.tables["builder_jobs"] = [r for r in self.tables["builder_jobs"] if r["id"] != row["id"]]
+            self.tables["builder_jobs"].append(row)
+        elif sql_l.startswith("insert into orders") or sql_l.startswith("insert or replace into orders"):
             try:
                 cols_part = sql_l.split("(", 1)[1].split(")")[0]
                 cols = [c.strip() for c in cols_part.split(",")]
@@ -218,6 +279,20 @@ class FakeD1:
             matches = [h for h in self.tables["handoff"] if h["spec_id"] == params[0]]
         elif "from specs where id" in sql_l:
             matches = [s for s in self.tables["specs"] if s["id"] == params[0]]
+        elif "from builder_sessions" in sql_l:
+            if "where id = ?" in sql_l:
+                matches = [s for s in self.tables["builder_sessions"] if s["id"] == params[0]]
+            else:
+                matches = list(self.tables["builder_sessions"])
+        elif "from builder_messages where session_id" in sql_l:
+            matches = [m for m in self.tables["builder_messages"] if m["session_id"] == params[0]]
+        elif "from builder_jobs" in sql_l:
+            if "where id = ?" in sql_l:
+                matches = [j for j in self.tables["builder_jobs"] if j["id"] == params[0]]
+            elif "where session_id = ?" in sql_l:
+                matches = [j for j in self.tables["builder_jobs"] if j["session_id"] == params[0]]
+            else:
+                matches = list(self.tables["builder_jobs"])
         elif "from orders" in sql_l and "group by" not in sql_l:
             if "where id = ?" in sql_l:
                 matches = [o for o in self.tables["orders"] if o["id"] == params[0]]

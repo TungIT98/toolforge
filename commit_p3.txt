@@ -1,0 +1,51 @@
+feat(p3): Builder Tool (user-facing chat-to-code product)
+
+P3 deliverables (Builder Tool):
+- migrations/0003_builder.sql: 3 tables
+  - builder_sessions: chat sessions with user
+  - builder_messages: chat history (user + assistant)
+  - builder_jobs: generated code artifacts
+- src/builder/chat.py: LLM conversation with user
+  - BUILDER_SYSTEM prompt: ask up to 5 clarifying questions
+  - detect_ready_response: parse JSON output (handles nested objects + markdown fence)
+  - chat_with_user: process message, save to DB, return AI response
+  - When LLM outputs {"ready": true, ...}: save spec + mark session ready_to_build
+- src/builder/generator.py: turn spec into code
+  - generate_code_from_spec: LLM call with simpler prompt than Forge
+  - Defaults to Python CLI/Flask for MVP simplicity
+- src/handlers/builder.py: 6 HTTP endpoints
+  - POST api builder session                  Create chat session
+  - POST api builder session ID message       Send user message
+  - GET  api builder session ID               Get session + history
+  - POST api builder session ID build         Generate code from spec
+  - GET  api builder job ID                   Get job + files
+  - GET  api builder jobs                     List jobs
+
+Frontend:
+- web/src/pages/Builder.tsx: chat UI
+  - Welcome screen with example prompts
+  - Chat bubbles (user/assistant)
+  - Auto-scroll to latest message
+  - "Build code" button when status=ready_to_build
+  - Code preview panel with file selector
+  - Download individual files (Blob) or all (loop)
+  - Copy to clipboard
+- web/src/App.tsx: added /builder route + nav link
+
+User flow:
+1. Visit /builder → click "Bắt đầu" → session created
+2. Type: "Tôi cần tool download video TikTok" → AI asks question
+3. Type: "Windows, MP4 no watermark" → AI may ask more or output ready=true
+4. Click "Build code ngay" → AI generates code in 10-30s
+5. See files (main.py, requirements.txt, README.md)
+6. Click "Tải tất cả" or individual files
+
+Pricing (future P3.5):
+- Free: 3 builds/day per IP
+- Pro: unlimited (TBD - need auth + payment)
+
+Tests: 126 passed locally (was 111, plus 15 new)
+- test_builder.py: 15 tests (detect_ready, build_llm_messages, session CRUD,
+  chat first/trigger/404, generate_code, full E2E flow)
+
+Next: P3.5 (auth + freemium tracking) or P4 (Tauri build pipeline)
