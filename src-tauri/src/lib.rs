@@ -8,7 +8,30 @@ pub struct ToolInfo {
     pub name: String,
     pub version: String,
     pub description: String,
-    pub license_key: String,
+    pub tool_id: String,
+    pub api_base: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LicenseInfo {
+    pub valid: bool,
+    pub reason: String,
+    pub customer_email: Option<String>,
+    pub expires_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LicenseVerifyRequest {
+    pub key: String,
+    pub tool_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LicenseVerifyResponse {
+    pub ok: bool,
+    pub valid: bool,
+    pub reason: String,
+    pub license: Option<serde_json::Value>,
 }
 
 #[tauri::command]
@@ -17,16 +40,46 @@ fn get_tool_info() -> ToolInfo {
         name: env!("CARGO_PKG_NAME").to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         description: env!("CARGO_PKG_DESCRIPTION").to_string(),
-        license_key: "PLACEHOLDER_LICENSE_KEY".to_string(),
+        tool_id: env!("CARGO_PKG_NAME").to_string().replace("toolforge-", "").replace("-app", ""),
+        api_base: option_env!("TOOLFORGE_API_BASE").unwrap_or("https://toolforge-api.thanhtungtran364.workers.dev").to_string(),
     }
 }
 
 #[tauri::command]
-fn verify_license(license_key: String) -> bool {
-    // TODO: Call /api/license/verify to check license validity
-    // For now: simple format check (XXXX-XXXX-XXXX-XXXX)
-    license_key.split('-').count() == 4
-        && license_key.split('-').all(|p| p.len() == 4 && p.chars().all(|c| c.is_ascii_hexdigit()))
+async fn verify_license(license_key: String) -> Result<LicenseInfo, String> {
+    let info = get_tool_info();
+    let url = format!("{}/api/license/verify", info.api_base);
+
+    // Make HTTP POST request
+    let client = reqwest::Client::new();
+    let req = LicenseVerifyRequest {
+        key: license_key.clone(),
+        tool_id: info.tool_id.clone(),
+    };
+
+    let resp = client
+        .post(&url)
+        .json(&req)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| format!("HTTP request failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("Server returned {}", resp.status()));
+    }
+
+    let body: LicenseVerifyResponse = resp
+        .json()
+        .await
+        .map_err(|e| format!("Parse JSON failed: {}", e))?;
+
+    Ok(LicenseInfo {
+        valid: body.valid,
+        reason: body.reason,
+        customer_email: body.license.as_ref().and_then(|l| l.get("customer_email").and_then(|v| v.as_str()).map(String::from)),
+        expires_at: body.license.as_ref().and_then(|l| l.get("expires_at").and_then(|v| v.as_str()).map(String::from)),
+    })
 }
 
 #[tauri::command]

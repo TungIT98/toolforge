@@ -2,7 +2,7 @@ name: Build Tauri + Upload to R2
 
 # Triggered by Worker backend via workflow_dispatch API
 # Inputs: build_id, tool_id, version
-# Outputs: callback Worker /api/forge/webhook/built with signed R2 URL
+# Outputs: callback Worker /api/forge/webhook/built with R2 signed URL
 
 on:
   workflow_dispatch:
@@ -34,10 +34,9 @@ concurrency:
 
 jobs:
   build:
-    name: Build ${{ inputs.tool_id }} v${{ inputs.version }}
-    runs-on: ubuntu-latest
+    name: Build ${{ inputs.tool_id }} v${{ inputs.version }} (Windows)
+    runs-on: windows-latest
     timeout-minutes: 30
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,7 +51,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          targets: x86_64-unknown-linux-gnu,x86_64-pc-windows-msvc
+          targets: x86_64-pc-windows-msvc
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
@@ -62,21 +61,11 @@ jobs:
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2.0" --locked
 
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            libsoup-3.0-dev \
-            libjavascriptcoregtk-4.1-dev
-
       - name: Update tauri.conf.json with build metadata
+        shell: bash
         working-directory: src-tauri
         run: |
-          python3 -c "
+          python -c "
           import json
           with open('tauri.conf.json', 'r') as f:
               conf = json.load(f)
@@ -85,56 +74,119 @@ jobs:
               json.dump(conf, f, indent=2)
           "
 
-      - name: Build Tauri (Windows .exe via cargo-xwin)
-        # Note: building Windows .exe on Linux requires cargo-xwin
-        # For MVP, we skip Windows cross-compile and just verify Linux build
-        # Real Windows .exe build is post-MVP (needs Windows runner)
+      - name: Build Tauri (Windows .exe)
         working-directory: src-tauri
         run: |
-          # For MVP: just verify Rust code compiles + runs tests
-          cargo check --release
-          cargo test --release
-          echo "MVP: Rust check + test passed. Windows .exe build will be done on Windows runner in P4.5."
+          cargo tauri build --target x86_64-pc-windows-msvc
+          echo "Build complete"
+          ls -la target/x86_64-pc-windows-msvc/release/bundle/
 
-      - name: Upload to R2 (P4.5: real binary)
-        if: false  # disabled for MVP — needs real Tauri build first
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      - name: Find generated installer
+        shell: bash
+        id: find_installer
         run: |
-          # Build the actual Windows .exe
-          # cargo tauri build --target x86_64-pc-windows-msvc
-          # 
-          # Upload to R2:
-          # aws s3 cp src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi \
-          #   s3://toolforge-tools/${{ inputs.tool_id }}/${{ inputs.version }}/setup.exe \
-          #   --endpoint-url $R2_ENDPOINT
-          #
-          # Get signed URL:
-          # SIGNED_URL=$(aws s3 presign s3://toolforge-tools/${{ inputs.tool_id }}/${{ inputs.version }}/setup.exe \
-          #   --endpoint-url $R2_ENDPOINT --expires-in 604800)
-          # 
-          # echo "SIGNED_URL=$SIGNED_URL" >> $GITHUB_OUTPUT
-          echo "Disabled in MVP — see P4.5 plan in docs/P4-PLAN.md"
+          # Tauri produces .msi (WiX) and/or .exe (NSIS). Prefer .msi.
+          MSI=$(find src-tauri/target/x86_64-pc-windows-msvc/release/bundle -name "*.msi" | head -1)
+          if [ -z "$MSI" ]; then
+            EXE=$(find src-tauri/target/x86_64-pc-windows-msvc/release/bundle -name "*setup*.exe" -o -name "*x64*.exe" | head -1)
+            INSTALLER="$EXE"
+          else
+            INSTALLER="$MSI"
+          fi
+          if [ -z "$INSTALLER" ]; then
+            echo "::error::No installer found"
+            exit 1
+          fi
+          echo "installer=$INSTALLER" >> $GITHUB_OUTPUT
+          echo "Installer: $INSTALLER"
+          ls -la "$INSTALLER"
 
-      - name: Report result to Worker (callback)
+      - name: Configure AWS (R2)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          aws-region: auto
+          # R2 endpoint
+          endpoint-url: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+
+      - name: Upload to R2
+        shell: bash
+        env:
+          BUILD_ID: ${{ inputs.build_id }}
+          TOOL_ID: ${{ inputs.tool_id }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          INSTALLER="${{ steps.find_installer.outputs.installer }}"
+          R2_KEY="${TOOL_ID}/${VERSION}/setup-${VERSION}.${INSTALLER##*.}"
+          echo "Uploading $INSTALLER to r2://toolforge-tools/$R2_KEY"
+          aws s3 cp "$INSTALLER" "s3://toolforge-tools/$R2_KEY" \
+            --endpoint-url https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          SIZE=$(stat -c%s "$INSTALLER")
+          echo "size=$SIZE"
+          echo "r2_key=$R2_KEY" >> $GITHUB_OUTPUT
+          echo "size=$SIZE" >> $GITHUB_OUTPUT
+
+      - name: Generate signed URL (7-day)
+        id: signed_url
+        shell: bash
+        env:
+          TOOL_ID: ${{ inputs.tool_id }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          R2_KEY="${{ steps.find_installer.outputs.r2_key }}"
+          SIGNED_URL=$(aws s3 presign "s3://toolforge-tools/$R2_KEY" \
+            --endpoint-url https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com \
+            --expires-in 604800)
+          echo "signed_url=$SIGNED_URL" >> $GITHUB_OUTPUT
+          echo "Signed URL generated (7-day expiry)"
+
+      - name: Report success to Worker
+        if: success()
+        shell: bash
         env:
           CALLBACK_URL: ${{ inputs.callback_url }}
           WEBHOOK_SECRET: ${{ inputs.webhook_secret }}
           BUILD_ID: ${{ inputs.build_id }}
           TOOL_ID: ${{ inputs.tool_id }}
           VERSION: ${{ inputs.version }}
-          STATUS: ${{ job.status }}
+          R2_KEY: ${{ steps.find_installer.outputs.r2_key }}
+          SIGNED_URL: ${{ steps.signed_url.outputs.signed_url }}
+          SIZE: ${{ steps.find_installer.outputs.size }}
         run: |
-          if [ "$STATUS" = "success" ]; then
-            curl -X POST "$CALLBACK_URL" \
-              -H "Content-Type: application/json" \
-              -H "X-Webhook-Secret: $WEBHOOK_SECRET" \
-              -d "{\"build_id\": \"$BUILD_ID\", \"tool_id\": \"$TOOL_ID\", \"version\": \"$VERSION\", \"status\": \"success\", \"binary_url\": \"https://placeholder.r2.dev/$TOOL_ID/$VERSION/setup.exe\", \"size_bytes\": 0, \"test_result\": \"pass\"}"
-          else
-            curl -X POST "$CALLBACK_URL" \
-              -H "Content-Type: application/json" \
-              -H "X-Webhook-Secret: $WEBHOOK_SECRET" \
-              -d "{\"build_id\": \"$BUILD_ID\", \"tool_id\": \"$TOOL_ID\", \"version\": \"$VERSION\", \"status\": \"failed\", \"error\": \"build failed\"}"
-          fi
+          curl -X POST "$CALLBACK_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Webhook-Secret: $WEBHOOK_SECRET" \
+            -d "{
+              \"build_id\": \"$BUILD_ID\",
+              \"tool_id\": \"$TOOL_ID\",
+              \"version\": \"$VERSION\",
+              \"status\": \"success\",
+              \"r2_key\": \"$R2_KEY\",
+              \"binary_url\": \"$SIGNED_URL\",
+              \"size_bytes\": $SIZE,
+              \"test_result\": \"pass\"
+            }"
+          echo "Reported success to Worker"
+
+      - name: Report failure to Worker
+        if: failure()
+        shell: bash
+        env:
+          CALLBACK_URL: ${{ inputs.callback_url }}
+          WEBHOOK_SECRET: ${{ inputs.webhook_secret }}
+          BUILD_ID: ${{ inputs.build_id }}
+          TOOL_ID: ${{ inputs.tool_id }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          curl -X POST "$CALLBACK_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Webhook-Secret: $WEBHOOK_SECRET" \
+            -d "{
+              \"build_id\": \"$BUILD_ID\",
+              \"tool_id\": \"$TOOL_ID\",
+              \"version\": \"$VERSION\",
+              \"status\": \"failed\",
+              \"error\": \"GH Action build failed - check logs\"
+            }" || true
+          echo "Reported failure to Worker (best effort)"

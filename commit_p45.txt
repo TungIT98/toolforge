@@ -1,0 +1,50 @@
+feat(p4.5): Windows build + R2 upload + server license verify
+
+P4.5 deliverables (production-ready Tauri pipeline):
+- .github/workflows/build-tauri.yml: production build
+  - runs-on: windows-latest (real Windows runner)
+  - cargo tauri build --target x86_64-pc-windows-msvc
+  - aws s3 cp upload to R2 with r2_key=<tool_id>/<version>/setup-<version>.<ext>
+  - aws s3 presign generate signed URL (7-day)
+  - Callback Worker with full signed URL (not placeholder)
+  - Reports success/failure separately to Worker
+- src/forge/license_verifier.py: server-side license check
+  - format check, D1 lookup, status check, expiry check, tool match
+  - Returns valid + reason: active/expired/revoked/tool_mismatch/not_found/invalid_format
+- src/handlers/license.py: 2 public endpoints (no auth required)
+  - POST api license verify   JSON body verify
+  - GET  api license check    Query string verify (for Tauri startup check)
+- src-tauri/src/lib.rs: real server call
+  - verify_license() now async, calls Worker /api/license/verify
+  - Returns LicenseInfo {valid, reason, customer_email, expires_at}
+  - get_tool_info() now returns tool_id + api_base
+- src-tauri/Cargo.toml: add reqwest (HTTP client) for verify call
+- tests/test_license.py: 10 tests
+  - 7 verify_license tests (format, not_found, active, expired, revoked,
+    tool_mismatch, no_expiry)
+  - 3 handler tests (POST, missing fields, GET)
+
+Tests: 151 passed locally (was 141, plus 10 new)
+
+Required GitHub Actions secrets (5 new):
+- R2_ACCESS_KEY_ID
+- R2_SECRET_ACCESS_KEY
+- R2_ACCOUNT_ID (for endpoint URL)
+
+Tauri license flow (end-to-end):
+1. User downloads setup.exe from store
+2. Opens app, enters license key XXXX-XXXX-XXXX-XXXX
+3. Tauri app calls POST https://toolforge-api.../api/license/verify
+4. Worker checks D1 licenses table (active, not expired, tool match)
+5. Returns {valid: true, customer_email, expires_at} or {valid: false, reason}
+6. App unlocks features or shows error message
+
+Production deploy checklist:
+- wrangler secret put R2_ACCOUNT_ID
+- wrangler secret put R2_ACCESS_KEY_ID
+- wrangler secret put R2_SECRET_ACCESS_KEY
+- wrangler secret put GITHUB_TOKEN
+- wrangler secret put WEBHOOK_SECRET
+- Update src-tauri/src/lib.rs api_base if using custom domain
+
+Next: P5 (Helper Telegram Bot)
