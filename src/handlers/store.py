@@ -84,10 +84,16 @@ async def store_detail_handler(request: "object", env: "object", ctx: "object") 
     db = getattr(env, "DB", None)
     if db is None:
         return error_response("D1 not bound", status=500, code="DB_NOT_BOUND")
-    # Extract tool_id from path
-    path = getattr(request, "path", "")
-    # Path: /api/store/tools/{tool_id}
-    tool_id = path.split("/api/store/tools/")[-1].strip("/")
+    # Extract tool_id from path_params (set by router) or fall back to .path
+    # for test mocks.
+    tool_id = ""
+    pp = getattr(request, "path_params", None)
+    if isinstance(pp, dict):
+        tool_id = pp.get("tool_id", "") or ""
+    if not tool_id:
+        # Fallback: parse from path (for tests with SimpleNamespace request)
+        path = getattr(request, "path", "")
+        tool_id = path.split("/api/store/tools/")[-1].strip("/")
     if not tool_id:
         return error_response("Missing tool_id", status=400, code="MISSING_TOOL_ID")
     tool = await get_tool_detail(db, tool_id)
@@ -131,8 +137,14 @@ async def store_update_handler(request: "object", env: "object", ctx: "object") 
     db = getattr(env, "DB", None)
     if db is None:
         return error_response("D1 not bound", status=500, code="DB_NOT_BOUND")
-    path = getattr(request, "path", "")
-    tool_id = path.split("/api/store/tools/")[-1].strip("/")
+    # Extract tool_id from path_params (router) or fallback to .path (tests)
+    tool_id = ""
+    pp = getattr(request, "path_params", None)
+    if isinstance(pp, dict):
+        tool_id = pp.get("tool_id", "") or ""
+    if not tool_id:
+        path = getattr(request, "path", "")
+        tool_id = path.split("/api/store/tools/")[-1].strip("/")
     if not tool_id:
         return error_response("Missing tool_id", status=400, code="MISSING_TOOL_ID")
     try:

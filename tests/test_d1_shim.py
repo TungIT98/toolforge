@@ -56,12 +56,18 @@ class FakeJsProxyIterable:
 # === Mock D1 binding ===
 
 class FakeD1Statement:
-    """Mock a real D1 prepared statement: bind()/first()/all()/run() return JsProxy."""
+    """Mock a real D1 prepared statement: bind()/first()/all()/run() return JsProxy.
 
-    def __init__(self, first_result=None, all_result=None, run_result=None):
+    Mimics the real CF D1 response shape:
+    - first() returns row directly or None
+    - all() returns {success, meta, results: [...]} envelope
+    - run() returns {success, meta, ...} envelope
+    """
+
+    def __init__(self, first_result=None, all_envelope=None, run_envelope=None):
         self._first = first_result
-        self._all = all_result
-        self._run = run_result
+        self._all_envelope = all_envelope
+        self._run_envelope = run_envelope
 
     def bind(self, *args):
         return self  # chainable
@@ -70,10 +76,32 @@ class FakeD1Statement:
         return self._first
 
     async def all(self):
-        return self._all
+        return self._all_envelope
 
     async def run(self):
-        return self._run
+        return self._run_envelope
+
+
+class FakeJsResultsEnvelope:
+    """Mock the D1 all() result envelope: {success, meta, results: [...rows...]}"""
+
+    def __init__(self, results_list):
+        self.results = results_list
+        self.success = True
+
+    def to_py(self):
+        return {"success": True, "results": [r.to_py() if hasattr(r, "to_py") else r for r in self.results]}
+
+
+class FakeJsRunEnvelope:
+    """Mock the D1 run() result envelope: {success, meta}"""
+
+    def __init__(self, success=True, last_row_id=None, changes=0):
+        self.success = success
+        self.meta = {"last_row_id": last_row_id, "changes": changes}
+
+    def to_py(self):
+        return {"success": self.success, "meta": self.meta}
 
 
 class FakeRealD1:
@@ -81,16 +109,28 @@ class FakeRealD1:
 
     def __init__(self, first_result=None, all_result=None, run_result=None):
         self._first = first_result
-        self._all = all_result
-        self._run = run_result
+        self._all_result = all_result
+        self._run_result = run_result
         self.prepare_calls = []
 
     def prepare(self, sql):
         self.prepare_calls.append(sql)
+        # Wrap all_result in an envelope if it's a raw list
+        all_env = None
+        if self._all_result is not None:
+            if hasattr(self._all_result, "to_py") or isinstance(self._all_result, dict):
+                # Already envelope-shaped
+                all_env = self._all_result
+            else:
+                # Raw list of rows — wrap in envelope
+                all_env = FakeJsResultsEnvelope(self._all_result)
+        run_env = self._run_result
+        if run_env is not None and not (hasattr(run_env, "to_py") or isinstance(run_env, dict)):
+            run_env = FakeJsRunEnvelope()
         return FakeD1Statement(
             first_result=self._first,
-            all_result=self._all,
-            run_result=self._run,
+            all_envelope=all_env,
+            run_envelope=run_env,
         )
 
 

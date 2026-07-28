@@ -113,6 +113,14 @@ async def dispatch(request: "object", env: "object", ctx: "object") -> "Response
         url_path = getattr(request, "path", "/")
     method = request.method
 
+    # Synthesize `request.path` for handlers that read it directly. CF
+    # Request doesn't expose `.path`; tests build SimpleNamespace with it.
+    # Set on the real request so handlers see the same value either way.
+    try:
+        request.path = url_path
+    except Exception:
+        pass  # Read-only request types — handlers should fall back gracefully
+
     for m, p, regex, fn in ROUTES:
         if m == method:
             match = regex.match(url_path)

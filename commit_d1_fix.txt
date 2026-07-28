@@ -1,0 +1,43 @@
+fix(d1): v2 — correctly handle all() envelope + request.path synthesis
+
+Follows commit 6270c1f which added the JsProxy shim but had two
+remaining bugs uncovered by live testing.
+
+**Bug 1: all() returned empty list**
+D1 all() returns `{success, meta, results: [rows]}` envelope, not a
+raw iterable. The v1 shim did `[_to_python(r) for r in result]`
+which iterated the wrapper (yielding 0 useful items) instead of
+extracting `.results` (the actual array of rows). v2 extracts via
+`getattr(result, "results")` with to_py fallback.
+
+**Bug 2: detail endpoint returned MISSING_TOOL_ID**
+CF Python Request has no `.path` attribute; 10+ handlers do
+`getattr(request, "path", "")` and parse it manually. On CF runtime
+this is always "" so all path-extraction handlers 400'd.
+
+Fixed in router by setting `request.path = url_path` (parsed from
+request.url) once per request. Handlers that read .path now get
+the right value transparently. No changes needed in the 10+ handlers.
+
+**Other fixes**
+- Store detail/update: use `request.path_params` (set by router regex)
+  with .path fallback for tests — belt + suspenders
+- D1 shim tests: updated FakeD1 mocks to use envelope shape
+  `{success, meta, results}` matching real D1
+- Removed debug endpoint /api/debug/d1 (used during live debugging)
+
+**Live verification (post-deploy):**
+- GET /api/store/tools       → 200, 7 tools (full data)
+- GET /api/store/tools?{q,niche,status,sort}  → 200, filters work
+- GET /api/store/tools/capcut-desktop-reup   → 200, full detail
+- GET /api/store/stats       → 200, by_niche/by_status counts
+- POST /api/store/seed       → 200, 7 inserted
+- GET /api/health, /showcase, /agents        → 200 (untouched)
+
+**Tests: 303/303 passing** (281 baseline + 22 D1 shim unit tests)
+
+Files changed:
+- src/lib/d1.py: all() now extracts .results envelope
+- src/router.py: synthesize request.path from url
+- src/handlers/store.py: use path_params with .path fallback
+- tests/test_d1_shim.py: mocks use envelope shape

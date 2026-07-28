@@ -73,29 +73,75 @@ class _WrappedStatement:
         return self
 
     async def first(self) -> dict[str, Any] | None:
-        """Run the query and return the first row as a native dict (or None)."""
+        """Run the query and return the first row as a native dict (or None).
+
+        D1's first() returns the row directly (or null) — NOT wrapped in
+        a result envelope. We just unwrap the JsProxy.
+        """
         result = await self._stmt.first()
         if result is None:
             return None
         return _to_python(result)
 
     async def all(self) -> list[dict[str, Any]]:
-        """Run the query and return all rows as a list of native dicts."""
+        """Run the query and return all rows as a list of native dicts.
+
+        D1's all() returns a result envelope `{success, meta, results: [...]}`.
+        We extract `.results` (the array of rows) and convert each row.
+
+        Falls back to iterating the envelope directly if `.results` is missing
+        (e.g. older D1 runtimes or unexpected shapes).
+        """
         result = await self._stmt.all()
         if result is None:
             return []
-        # result is an iterable of rows; convert each
-        return [_to_python(r) for r in result]
+        # Extract the .results array (the list of rows)
+        rows_obj = _get_results_array(result)
+        if rows_obj is None:
+            return []
+        return [_to_python(r) for r in rows_obj]
 
     async def run(self) -> dict[str, Any]:
-        """Execute a write statement and return metadata as a native dict.
+        """Execute a write statement and return the result envelope as a dict.
 
-        D1's run() returns {meta, success, etc.}. JsProxy unwraps the same.
+        D1's run() returns `{success, meta}` (and possibly `results`).
         """
         result = await self._stmt.run()
         if result is None:
             return {}
         return _to_python(result)
+
+
+def _get_results_array(result: Any) -> Any:
+    """Extract the array of rows from a D1 all() result envelope.
+
+    D1's all() returns `{success, meta, results: [...rows...]}`. The
+    `.results` field is a JsProxy array. This function returns that array
+    (or None if it can't be found).
+    """
+    if result is None:
+        return None
+    # Direct .results attribute
+    if hasattr(result, "results"):
+        try:
+            return result.results
+        except Exception:
+            pass
+    # to_py() path
+    to_py = getattr(result, "to_py", None)
+    if callable(to_py):
+        try:
+            py = to_py()
+            if isinstance(py, dict) and "results" in py:
+                return py["results"]
+        except Exception:
+            pass
+    # Maybe result IS already the array (some shapes)
+    if hasattr(result, "__iter__") and not isinstance(result, (str, bytes)):
+        # Check if it's list-like (has __len__)
+        if hasattr(result, "__len__"):
+            return result
+    return None
 
 
 def _to_python(obj: Any) -> Any:
