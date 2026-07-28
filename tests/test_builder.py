@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
+from src.lib.http import _Response as _MockResponse
 
 from src.builder.chat import (
     build_llm_messages,
@@ -122,7 +123,7 @@ async def test_chat_with_user_first_message():
         "model": "minimax/MiniMax-M3", "latency_ms": 1000,
     }
 
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_make_fake_resp(fake_response))):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_make_fake_resp(fake_response))):
         result = await chat_with_user(env.DB, sess["session_id"], "Tôi cần tool download video TikTok", client)
 
     assert result["ok"]
@@ -156,7 +157,7 @@ async def test_chat_with_user_triggers_ready():
         "model": "minimax/MiniMax-M3", "latency_ms": 2000,
     }
 
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_make_fake_resp(fake_response))):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_make_fake_resp(fake_response))):
         result = await chat_with_user(env.DB, sess["session_id"], "Build đi", client)
 
     assert result["ok"]
@@ -199,7 +200,7 @@ async def test_generate_code_from_spec():
         "model": "minimax/MiniMax-M3", "latency_ms": 3000,
     }
 
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_make_fake_resp(fake_response))):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_make_fake_resp(fake_response))):
         result = await generate_code_from_spec(
             "# Spec\n## Problem\nTest",
             client,
@@ -275,7 +276,7 @@ async def test_builder_full_flow_chat_then_build():
         if call_count["i"] == 1:
             return _make_fake_resp(fake_chat)
         return _make_fake_resp(fake_build)
-    with patch("httpx.AsyncClient.post", new=fake_post):
+    with patch("src.lib.http.AsyncClient.post", new=fake_post):
         resp2 = await session_message_handler(Req2(), env, None)
         body2 = json.loads(resp2.body)
         assert body2["ok"]
@@ -308,8 +309,8 @@ async def test_builder_full_flow_chat_then_build():
 # === helpers ===
 
 def _make_fake_resp(payload: dict):
-    """Build fake httpx.Response with Anthropic API format."""
-    return httpx.Response(200, json={
+    """Build fake _MockResponse with Anthropic API format."""
+    return _MockResponse(200, body_json={
         "id": "msg_test", "model": payload.get("model", "minimax/MiniMax-M3"),
         "content": [{"type": "text", "text": payload["text"]}],
         "usage": payload.get("usage", {}),

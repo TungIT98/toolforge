@@ -9,20 +9,19 @@ Supports path parameters via `{name}` syntax. Example:
 
 At runtime, `dispatch()` compiles each registered path to a regex
 (`/api/forge/download/{id}` -> `^/api/forge/download/(?P<id>[^/]+)$`)
-and matches incoming `request.path` against it. On a hit, the captured
-groups are attached to the request object as `request.path_params`.
+and matches the path extracted from `request.url` against it. On a
+hit, the captured groups are attached to the request object as
+`request.path_params`.
 
-Why the explicit regex instead of exact-string match: a previous bug
-shipped with `@route("POST", "/api/builder/session/{session_id}/message")`
-registered, but the runtime only did `if p == url_path`, so every
-dynamic path 404'd in production. Tests passed because the registered
-list still contained the literal pattern string. The regex match closes
-that hole.
+CF Python Workers note: the `Request` object does NOT have a `.path`
+attribute (unlike the older Workers Python SDK). Path must be extracted
+from `request.url` via `urllib.parse.urlparse`.
 """
 from __future__ import annotations
 
 import re
 from typing import Awaitable, Callable
+from urllib.parse import urlparse
 
 from src.lib.log import get_logger
 from src.lib.response import error_response, handle_cors_preflight, json_response
@@ -106,8 +105,13 @@ async def dispatch(request: "object", env: "object", ctx: "object") -> "Response
         orchestrator, payment, scout, showcase, store, telegram, version,
     )
 
-    url_path = request.path  # type: ignore[attr-defined]
-    method = request.method  # type: ignore[attr-defined]
+    # CF Python Workers Request has no `.path` attr; parse from `.url`.
+    # Fall back to `.path` for tests that build a SimpleNamespace mock.
+    if hasattr(request, "url") and isinstance(getattr(request, "url", None), str):
+        url_path = urlparse(request.url).path
+    else:
+        url_path = getattr(request, "path", "/")
+    method = request.method
 
     for m, p, regex, fn in ROUTES:
         if m == method:

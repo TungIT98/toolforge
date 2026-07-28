@@ -54,7 +54,7 @@ async def trigger_github_workflow(
 
     # GH API endpoint
     url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/actions/workflows/build-tauri.yml/dispatches"
-    import httpx
+    from src.lib.http import AsyncClient
     payload = {
         "ref": "main",  # workflow must be on main
         "inputs": {
@@ -72,7 +72,7 @@ async def trigger_github_workflow(
     }
 
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with AsyncClient(timeout=15) as client:
             resp = await client.post(url, headers=headers, json=payload)
         if resp.status_code == 204:
             log.info("gh_workflow_triggered", build_id=build_id, tool_id=tool_id)

@@ -1,19 +1,20 @@
 """Tests for Helper agent + Telegram integration.
 
-Mock httpx.AsyncClient.post to test Telegram interactions without real API calls.
+Mock src.lib.http. to test Telegram interactions without real API calls.
 """
 import json
 from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
+from src.lib.http import _Response as _MockResponse
 
 from tests.test_e2e import FakeD1, FakeEnv
 
 
 def _mock_telegram_ok():
     """Mock httpx response for successful Telegram sendMessage."""
-    return httpx.Response(200, json={
+    return _MockResponse(200, body_json={
         "ok": True,
         "result": {
             "message_id": 12345,
@@ -25,7 +26,7 @@ def _mock_telegram_ok():
 
 
 def _mock_telegram_error(description: str = "Bad Request: chat not found"):
-    return httpx.Response(400, json={"ok": False, "description": description})
+    return _MockResponse(400, body_json={"ok": False, "description": description})
 
 
 def _make_env(token: str = "test-bot-token", chat_id: str = "111") -> FakeEnv:
@@ -117,7 +118,7 @@ def test_telegram_configured_from_env_object():
 @pytest.mark.asyncio
 async def test_send_message_success():
     from src.lib.telegram import send_message
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
         result = await send_message(chat_id=111, text="hello", env=_make_env())
     assert result["ok"] is True
     assert result["message_id"] == 12345
@@ -137,7 +138,7 @@ async def test_send_message_not_configured():
 @pytest.mark.asyncio
 async def test_send_message_api_error():
     from src.lib.telegram import send_message
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_error())):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_error())):
         result = await send_message(chat_id=999, text="hi", env=_make_env())
     assert result["ok"] is False
     assert result["code"] == "TELEGRAM_API_ERROR"
@@ -147,9 +148,10 @@ async def test_send_message_api_error():
 @pytest.mark.asyncio
 async def test_send_message_timeout():
     from src.lib.telegram import send_message
+    from src.lib.http import TimeoutException as _HTTPTimeout
     async def timeout_post(*a, **kw):
-        raise httpx.TimeoutException("timeout")
-    with patch("httpx.AsyncClient.post", new=timeout_post):
+        raise _HTTPTimeout("timeout")
+    with patch("src.lib.http.AsyncClient.post", new=timeout_post):
         result = await send_message(chat_id=111, text="hi", env=_make_env())
     assert result["ok"] is False
     assert result["code"] == "TELEGRAM_TIMEOUT"
@@ -162,7 +164,7 @@ async def test_handle_message_start():
     """Send /start → welcome message with name."""
     from src.helper import handle_message
     update = _make_update("/start", from_first_name="Anh")
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
         result = await handle_message(update, _make_env())
     assert result["replied"] is True
     assert result["ok"] is True
@@ -173,7 +175,7 @@ async def test_handle_message_help():
     """Send /help → help text."""
     from src.helper import handle_message
     update = _make_update("/help")
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
         result = await handle_message(update, _make_env())
     assert result["replied"] is True
 
@@ -190,7 +192,7 @@ async def test_handle_message_order_found():
         "paid_at": "2026-07-27", "created_at": "2026-07-27",
     })
     update = _make_update("/order order-test123")
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
         result = await handle_message(update, env)
     assert result["replied"] is True
 
@@ -200,7 +202,7 @@ async def test_handle_message_order_not_found():
     """Send /order <missing> → not found message."""
     from src.helper import handle_message
     update = _make_update("/order order-nonexistent")
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
         result = await handle_message(update, _make_env())
     assert result["replied"] is True
 
@@ -210,7 +212,7 @@ async def test_handle_message_order_no_args():
     """Send /order without args → asks for ID."""
     from src.helper import handle_message
     update = _make_update("/order")
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
         result = await handle_message(update, _make_env())
     assert result["replied"] is True
 
@@ -220,7 +222,7 @@ async def test_handle_message_unknown_command():
     """Unknown command → suggests /help."""
     from src.helper import handle_message
     update = _make_update("/foo bar")
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
         result = await handle_message(update, _make_env())
     assert result["replied"] is True
 
@@ -230,7 +232,7 @@ async def test_handle_message_non_command_friendly_fallback():
     """Plain text (not command) → friendly fallback."""
     from src.helper import handle_message
     update = _make_update("hello bot")
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
         result = await handle_message(update, _make_env())
     assert result["replied"] is True
 
@@ -262,7 +264,7 @@ async def test_send_license_to_customer_success():
     """Numeric chat_id → send license via Telegram."""
     from src.helper import send_license_to_customer
     order = {"id": "o1", "tool_name": "CapCut Reup", "amount_vnd": 1000000, "customer_telegram": "111"}
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
         result = await send_license_to_customer(None, _make_env(), order, "LIC-1234-5678")
     assert result["ok"] is True
     assert result["message_id"] == 12345
@@ -287,7 +289,7 @@ async def test_daily_report_no_db():
 async def test_daily_report_empty():
     """Empty D1 → report with zeros."""
     from src.helper import daily_report
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
         result = await daily_report(_make_env())
     assert result["ok"] is True
     assert result["orders"] == 0
@@ -310,7 +312,7 @@ async def test_daily_report_with_data():
         {"id": "o3", "amount_vnd": 500000, "status": "pending", "created_at": today},
     ])
     env.DB.tables["licenses"].append({"key": "L-1", "created_at": today})
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
         result = await daily_report(env)
     assert result["ok"] is True
     assert result["orders"] == 3
@@ -372,7 +374,7 @@ async def test_telegram_webhook_processes_update():
         async def text(self):
             return json.dumps(_make_update("/start"))
 
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_mock_telegram_ok())):
         resp = await telegram_webhook_handler(Req(), CfgEnv(), None)
     assert resp.status == 200
 
@@ -407,7 +409,7 @@ async def test_telegram_status_returns_config_state():
         OWNER_TELEGRAM_CHAT_ID = "111"
         ADMIN_API_KEY = "admin-key-123"
 
-    with patch("httpx.AsyncClient.get", new=AsyncMock(return_value=httpx.Response(200, json={
+    with patch("src.lib.http.AsyncClient.get", new=AsyncMock(return_value=_MockResponse(200, body_json={
         "ok": True, "result": {"id": 123, "is_bot": True, "first_name": "ToolForge", "username": "toolforge_bot"}
     }))):
         resp = await telegram_status_handler(Req(), CfgEnv(), None)

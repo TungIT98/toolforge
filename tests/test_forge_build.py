@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from src.lib.http import _Response as _MockResponse
 
 from src.forge.license import is_valid_license_key
 from src.forge.r2_uploader import (
@@ -206,9 +207,9 @@ async def test_trigger_github_workflow_success():
     import httpx
 
     async def fake_post(*args, **kwargs):
-        return httpx.Response(204)
+        return _MockResponse(204)
 
-    with patch("httpx.AsyncClient.post", new=fake_post):
+    with patch("src.lib.http.AsyncClient.post", new=fake_post):
         from src.forge.build_orchestrator import trigger_github_workflow
         result = await trigger_github_workflow(
             build_id="build-001", tool_id="test-tool", version="0.1.0",
@@ -228,8 +229,8 @@ async def test_trigger_github_workflow_api_error():
     env = FakeEnvFull()
     import httpx
     async def fake_post(*args, **kwargs):
-        return httpx.Response(401, text="Bad credentials")
-    with patch("httpx.AsyncClient.post", new=fake_post):
+        return _MockResponse(401, text="Bad credentials")
+    with patch("src.lib.http.AsyncClient.post", new=fake_post):
         from src.forge.build_orchestrator import trigger_github_workflow
         result = await trigger_github_workflow(
             build_id="build-001", tool_id="test-tool", version="0.1.0",

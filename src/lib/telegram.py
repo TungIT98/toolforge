@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-import httpx
+from src.lib.http import AsyncClient, HTTPError, TimeoutException as HTTPTimeout
 
 from src.lib.log import get_logger
 
@@ -89,7 +89,7 @@ async def send_message(
         payload["reply_to_message_id"] = reply_to_message_id
 
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with AsyncClient(timeout=timeout) as client:
             r = await client.post(url, json=payload)
             data = r.json()
             if r.status_code == 200 and data.get("ok"):
@@ -102,7 +102,7 @@ async def send_message(
             err_msg = data.get("description", "Unknown Telegram API error")
             log.warn("telegram_api_error", err=err_msg, status=r.status_code)
             return {"ok": False, "error": err_msg, "code": "TELEGRAM_API_ERROR", "status": r.status_code}
-    except httpx.TimeoutException:
+    except HTTPTimeout:
         log.warn("telegram_timeout", chat_id=str(chat_id))
         return {"ok": False, "error": "Telegram API timeout", "code": "TELEGRAM_TIMEOUT"}
     except Exception as e:
@@ -136,7 +136,7 @@ async def set_webhook(webhook_url: str, env: Any | None = None, secret_token: st
     if secret_token:
         payload["secret_token"] = secret_token
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with AsyncClient(timeout=15.0) as client:
             r = await client.post(url, json=payload)
             data = r.json()
             if data.get("ok"):
@@ -153,7 +153,7 @@ async def get_me(env: Any | None = None) -> dict:
         return {"ok": False, "error": "Bot token not configured", "code": "TELEGRAM_NOT_CONFIGURED"}
     url = f"{TELEGRAM_API_BASE}/bot{token}/getMe"
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with AsyncClient(timeout=10.0) as client:
             r = await client.get(url)
             data = r.json()
             if data.get("ok"):

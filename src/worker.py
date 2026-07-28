@@ -16,6 +16,25 @@ Cron Triggers (3 active in wrangler.jsonc):
 """
 from __future__ import annotations
 
+import os
+import sys
+
+# CF Workers pyodide runs the entrypoint with `cwd` set to the directory
+# containing the main file (i.e. `src/`). That means `import src.foo`
+# would look for `src/src/foo`, which doesn't exist. Add the project
+# root to sys.path so the existing `from src.X import Y` statements
+# resolve correctly.
+# In CF Workers runtime, `os.getcwd()` returns the project root, and
+# `__file__` is relative. Try both.
+_candidates = [
+    os.environ.get("TOOLFORGE_PROJECT_ROOT", ""),
+    os.getcwd(),
+]
+for _cand in _candidates:
+    if _cand and _cand not in sys.path and os.path.isdir(os.path.join(_cand, "src")):
+        sys.path.insert(0, _cand)
+        break
+
 from src.lib.log import get_logger
 from src.lib.response import error_response
 from src.router import dispatch

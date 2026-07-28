@@ -12,7 +12,7 @@ import os
 import time
 from typing import Any
 
-import httpx
+from src.lib.http import AsyncClient, HTTPError, TimeoutException as HTTPTimeout
 
 from src.lib.log import get_logger
 
@@ -81,9 +81,9 @@ class LLMClient:
         )
         t0 = time.time()
         try:
-            async with httpx.AsyncClient(timeout=timeout_s) as client:
+            async with AsyncClient(timeout=timeout_s) as client:
                 resp = await client.post(url, headers=headers, json=payload)
-        except httpx.TimeoutException as e:
+        except HTTPTimeout as e:
             log.error("llm_call_timeout", err=str(e), timeout_s=timeout_s, agent=self.agent_name)
             raise LLMError(f"LLM timeout after {timeout_s}s") from e
         except Exception as e:

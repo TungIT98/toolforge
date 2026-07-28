@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
+from src.lib.http import _Response as _MockResponse
 
 from src.forge.license import generate_license_key
 
@@ -163,10 +164,10 @@ async def test_build_binary_success():
     })
 
     async def fake_post(*args, **kwargs):
-        return httpx.Response(204)
+        return _MockResponse(204)
 
     req = _make_request("POST", "/api/forge/build-binary", body={"build_id": "build-001"})
-    with patch("httpx.AsyncClient.post", new=fake_post):
+    with patch("src.lib.http.AsyncClient.post", new=fake_post):
         resp = await forge_build_binary_handler(req, env, None)
 
     assert resp.status == 200
@@ -197,10 +198,10 @@ async def test_build_binary_accepts_partial_test_result():
     })
 
     async def fake_post(*args, **kwargs):
-        return httpx.Response(204)
+        return _MockResponse(204)
 
     req = _make_request("POST", "/api/forge/build-binary", body={"build_id": "build-partial-001"})
-    with patch("httpx.AsyncClient.post", new=fake_post):
+    with patch("src.lib.http.AsyncClient.post", new=fake_post):
         resp = await forge_build_binary_handler(req, env, None)
 
     assert resp.status == 200
@@ -224,10 +225,10 @@ async def test_build_binary_uses_default_worker_url_when_env_missing():
     })
 
     async def fake_post(*args, **kwargs):
-        return httpx.Response(204)
+        return _MockResponse(204)
 
     req = _make_request("POST", "/api/forge/build-binary", body={"build_id": "build-002"})
-    with patch("httpx.AsyncClient.post", new=fake_post):
+    with patch("src.lib.http.AsyncClient.post", new=fake_post):
         resp = await forge_build_binary_handler(req, env, None)
 
     body = json.loads(resp.body.decode() if isinstance(resp.body, bytes) else resp.body)

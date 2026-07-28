@@ -8,12 +8,13 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
+from src.lib.http import _Response as _MockResponse
 
 from tests.test_e2e import FakeD1, FakeEnv
 
 
-def _resp_json(text: str) -> httpx.Response:
-    return httpx.Response(200, json={
+def _resp_json(text: str) -> _MockResponse:
+    return _MockResponse(200, body_json={
         "id": "msg_test", "model": "minimax/MiniMax-M3-test",
         "content": [{"type": "text", "text": text}],
         "usage": {"input_tokens": 200, "output_tokens": 500},
@@ -145,7 +146,7 @@ async def test_e2e_showcase_full_flow():
             }
 
     # === STEP 1: User clicks "Run Pipeline" on /showcase ===
-    with patch("httpx.AsyncClient.post", new=_make_full_mock()):
+    with patch("src.lib.http.AsyncClient.post", new=_make_full_mock()):
         resp = await orchestrator_run_handler(RunReq(), env, None)
     assert resp.status == 200, f"expected 200, got {resp.status}: {resp.body[:300]}"
     body = json.loads(resp.body)
@@ -227,7 +228,7 @@ async def test_e2e_showcase_creates_unique_tool_id_from_name():
             return {"input": "Test pain", "tool_name": "My Cool Tool"}
 
     env = FakeEnv()
-    with patch("httpx.AsyncClient.post", new=mock):
+    with patch("src.lib.http.AsyncClient.post", new=mock):
         resp = await orchestrator_run_handler(Req(), env, None)
     body = json.loads(resp.body)
     run = await get_run(env.DB, body["run_id"])
@@ -258,7 +259,7 @@ async def test_e2e_showcase_pipeline_runs_listed_in_order():
             return {"input": "Test", "tool_name": "Tool X"}
 
     # Run 3 times
-    with patch("httpx.AsyncClient.post", new=mock):
+    with patch("src.lib.http.AsyncClient.post", new=mock):
         for i in range(3):
             r = await orchestrator_run_handler(Req(), env, None)
             assert r.status == 200

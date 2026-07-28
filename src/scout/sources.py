@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-import httpx
+from src.lib.http import AsyncClient, HTTPError, TimeoutException as HTTPTimeout
 
 from src.lib.log import get_logger
 
@@ -90,7 +90,7 @@ async def _tavily_search(
         "include_raw_content": False,
     }
     try:
-        async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT_S) as client:
+        async with AsyncClient(timeout=DEFAULT_TIMEOUT_S) as client:
             resp = await client.post(TAVILY_BASE_URL, json=payload)
         if resp.status_code != 200:
             log.warn("tavily_non_200", err=f"status {resp.status_code}", body=resp.text[:200])

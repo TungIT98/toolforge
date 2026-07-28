@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
+from src.lib.http import _Response as _MockResponse
 
 from src.forge.license import generate_license_key
 from src.handlers.architect import _update_handoff_status, create_spec_from_pain_point
@@ -666,8 +667,8 @@ version = "0.1.0"
 """
 
 
-def make_fake_response(text: str) -> "httpx.Response":
-    """Build a fake httpx.Response with the given text in Anthropic API format."""
+def make_fake_response(text: str) -> "_MockResponse":
+    """Build a fake _MockResponse with the given text in Anthropic API format."""
     import json
     body = {
         "id": "msg_test",
@@ -676,7 +677,7 @@ def make_fake_response(text: str) -> "httpx.Response":
         "usage": {"input_tokens": 100, "output_tokens": len(text.split())},
         "stop_reason": "end_turn",
     }
-    return httpx.Response(200, json=body)
+    return _MockResponse(200, body_json=body)
 
 
 def make_fake_post_side_effect(responses: list):
@@ -709,7 +710,7 @@ async def test_e2e_happy_path():
     ]
     fake_post = make_fake_post_side_effect(responses)
 
-    with patch("httpx.AsyncClient.post", new=fake_post):
+    with patch("src.lib.http.AsyncClient.post", new=fake_post):
         # Step 1: Scout analyze
         client = LLMClient(api_key="test", agent_name="scout_e2e")
         raw_data = {
@@ -777,7 +778,7 @@ async def test_forge_rejects_non_approved_spec():
         "approved_at": None, "forge_handoff_at": None, "done_at": None,
     })
 
-    with patch("httpx.AsyncClient.post", new=AsyncMock()):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock()):
         result = await run_forge_build("spec-test-pending", env, triggered_by="e2e_test")
     # Spec status is 'pending_owner_review' (not 'approved') → SPEC_NOT_APPROVED fires first
     assert result["ok"] is False
@@ -801,7 +802,7 @@ async def test_forge_rejects_when_handoff_pending_but_spec_approved():
         "approved_at": None, "forge_handoff_at": None, "done_at": None,
     })
 
-    with patch("httpx.AsyncClient.post", new=AsyncMock()):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock()):
         result = await run_forge_build("spec-test-approved", env, triggered_by="e2e_test")
     assert result["ok"] is False
     assert result["code"] == "HANDOFF_NOT_APPROVED"
@@ -811,7 +812,7 @@ async def test_forge_rejects_when_handoff_pending_but_spec_approved():
 async def test_forge_rejects_nonexistent_spec():
     """Forge returns clean error if spec not found."""
     env = FakeEnv()
-    with patch("httpx.AsyncClient.post", new=AsyncMock()):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock()):
         result = await run_forge_build("spec-ghost-xxx", env, triggered_by="e2e_test")
     assert result["ok"] is False
     assert result["code"] == "SPEC_NOT_FOUND"
@@ -821,7 +822,7 @@ async def test_forge_rejects_nonexistent_spec():
 async def test_architect_priority_by_severity():
     """High severity pain point → high priority handoff."""
     env = FakeEnv()
-    with patch("httpx.AsyncClient.post", new=make_fake_post_side_effect([make_fake_response(FAKE_SPEC_MD)])):
+    with patch("src.lib.http.AsyncClient.post", new=make_fake_post_side_effect([make_fake_response(FAKE_SPEC_MD)])):
         result = await create_spec_from_pain_point(
             {"title": "x", "severity": 9}, env, category="desktop"
         )
@@ -829,7 +830,7 @@ async def test_architect_priority_by_severity():
         assert env.DB.tables["handoff"][0]["priority"] == "high"
 
     env2 = FakeEnv()
-    with patch("httpx.AsyncClient.post", new=make_fake_post_side_effect([make_fake_response(FAKE_SPEC_MD)])):
+    with patch("src.lib.http.AsyncClient.post", new=make_fake_post_side_effect([make_fake_response(FAKE_SPEC_MD)])):
         result2 = await create_spec_from_pain_point(
             {"title": "y", "severity": 5}, env2, category="desktop"
         )
@@ -845,7 +846,7 @@ async def test_scout_filters_avoid_true_pain_points():
         {"title": "Spam tool", "severity": 10, "audience": "x", "avoid": true, "description": "spam"},
         {"title": "Reup legit", "severity": 8, "audience": "x", "avoid": false, "description": "ok"}
     ]"""
-    with patch("httpx.AsyncClient.post", new=make_fake_post_side_effect([make_fake_response(fake_with_avoid)])):
+    with patch("src.lib.http.AsyncClient.post", new=make_fake_post_side_effect([make_fake_response(fake_with_avoid)])):
         client = LLMClient(api_key="test", agent_name="scout")
         raw_data = {"mmo_forums": [{"title": "x", "url": "u", "content": "y"}]}
         pain_points = await analyze_to_pain_points(raw_data, client)

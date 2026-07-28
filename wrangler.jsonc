@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "toolforge-api",
-  "main": "src/worker.py",
+  "main": "worker.py",
   "compatibility_date": "2025-07-01",
   "compatibility_flags": ["python_workers"],
   "workers_dev": true,
@@ -31,7 +31,7 @@
     {
       "binding": "DB",
       "database_name": "toolforge-db",
-      "database_id": "REPLACE_AFTER_WRANGLER_CREATE",  // Updated by `wrangler d1 create`
+      "database_id": "737a5cf6-7f47-4665-9455-b724241a9375",
       "migrations_dir": "migrations"
     }
   ],
@@ -48,23 +48,13 @@
   "kv_namespaces": [
     {
       "binding": "CACHE",
-      "id": "REPLACE_AFTER_WRANGLER_KV_CREATE"
+      "id": "b8b89153803c42b7bccd9c15cfc5dbae"
     }
   ],
 
-  // Cron Triggers (5 max free tier)
-  // - Scout daily 06:00 Asia/Saigon (= 23:00 UTC previous day)
-  // - Helper daily report 22:00 Asia/Saigon (= 15:00 UTC)
-  // - Hype daily ads report 21:00 Asia/Saigon (= 14:00 UTC)
-  // - Architect stale handoff check every 2h
-  // - Forge approved handoff check every 1h
-  "triggers": {
-    "crons": [
-      "0 23 * * *",  // Scout daily 06:00 Asia/Saigon
-      "0 15 * * *",  // Helper daily report 22:00 Asia/Saigon
-      "0 14 * * *"   // Hype daily ads report 21:00 Asia/Saigon
-    ]
-  },
+  // Cron Triggers — DISABLED because the account already has 5 cron
+  // triggers (CF Workers free-plan limit per account). Re-enable after
+  // freeing up at least 1 slot from another Worker.
 
   // Secrets (set via `wrangler secret put`):
   // - LLM_API_KEY               (MiniMax M3 key)
@@ -79,10 +69,8 @@
   // Observability
   "observability": {
     "enabled": true
-  },
-
-  // Limits
-  "limits": {
-    "cpu_ms": 30
   }
+  // CPU limits (`limits.cpu_ms`) are a paid-plan feature; removed for free tier.
+  // Workers free plan still has 30s wall-time per request, enforced at the
+  // platform level — no config needed here.
 }

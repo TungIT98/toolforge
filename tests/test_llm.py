@@ -10,12 +10,13 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
+from src.lib.http import _Response as _MockResponse
 
 from src.llm import LLMClient, LLMError, get_client
 
 
 class FakeResponse:
-    """Mimics httpx.Response for testing."""
+    """Mimics _MockResponse for testing."""
     def __init__(self, status_code: int, json_data: dict | None = None, text: str = ""):
         self.status_code = status_code
         self._json = json_data or {}
@@ -47,7 +48,7 @@ async def test_call_success(fake_env):
         "stop_reason": "end_turn",
     }
 
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=FakeResponse(200, fake_json))):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=FakeResponse(200, fake_json))):
         result = await client.call(system="sys", user="user", max_tokens=64)
 
     assert result["text"] == "ToolForge P0 OK"
@@ -62,7 +63,7 @@ async def test_call_non_200_raises(fake_env):
     """Non-200 response raises LLMError."""
     client = LLMClient(api_key="test-key-abc", agent_name="test")
 
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=FakeResponse(401, text="Unauthorized"))):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=FakeResponse(401, text="Unauthorized"))):
         with pytest.raises(LLMError) as exc_info:
             await client.call(system="s", user="u")
         assert "401" in str(exc_info.value)
@@ -73,7 +74,7 @@ async def test_call_timeout_raises(fake_env):
     """Timeout raises LLMError."""
     client = LLMClient(api_key="test-key-abc", agent_name="test")
 
-    with patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=httpx.TimeoutException("timeout"))):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(side_effect=httpx.TimeoutException("timeout"))):
         with pytest.raises(LLMError) as exc_info:
             await client.call(system="s", user="u", timeout_s=5)
         assert "timeout" in str(exc_info.value).lower()

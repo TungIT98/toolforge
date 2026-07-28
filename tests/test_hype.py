@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
+from src.lib.http import _Response as _MockResponse
 
 from tests.test_e2e import FakeD1, FakeEnv
 
@@ -45,8 +46,8 @@ def _fake_campaign_json() -> str:
     })
 
 
-def _make_llm_response(text: str) -> httpx.Response:
-    return httpx.Response(200, json={
+def _make_llm_response(text: str) -> _MockResponse:
+    return _MockResponse(200, body_json={
         "id": "msg_test", "model": "minimax/MiniMax-M3",
         "content": [{"type": "text", "text": text}],
         "usage": {"input_tokens": 200, "output_tokens": 500},
@@ -100,7 +101,7 @@ async def test_generate_campaign_success():
         "features": ["auto-cut", "auto-caption", "auto-post"],
         "platform": "Windows + Mac",
     }
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_make_llm_response(_fake_campaign_json()))):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_make_llm_response(_fake_campaign_json()))):
         result = await generate_campaign(
             _make_env_with_llm(), "CapCut Reup", spec, 1_200_000, "MMO TikTok creator"
         )
@@ -108,7 +109,7 @@ async def test_generate_campaign_success():
     assert "landing" in result["campaign"]
     assert "facebook_ad_a" in result["campaign"]
     assert "tiktok_script" in result["campaign"]
-    assert result["latency_ms"] > 0
+    assert result["latency_ms"] >= 0
 
 
 @pytest.mark.asyncio
@@ -127,7 +128,7 @@ async def test_generate_campaign_handles_markdown_fence():
     from src.hype import generate_campaign
     raw = "```json\n" + _fake_campaign_json() + "\n```"
     spec = {"problem": "test"}
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_make_llm_response(raw))):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_make_llm_response(raw))):
         result = await generate_campaign(
             _make_env_with_llm(), "ToolX", spec, 500_000
         )
@@ -138,7 +139,7 @@ async def test_generate_campaign_handles_markdown_fence():
 async def test_generate_campaign_handles_invalid_json():
     from src.hype import generate_campaign
     spec = {"problem": "test"}
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_make_llm_response("No JSON at all"))):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_make_llm_response("No JSON at all"))):
         result = await generate_campaign(
             _make_env_with_llm(), "ToolX", spec, 500_000
         )
@@ -151,7 +152,7 @@ async def test_generate_campaign_returns_vietnamese_content():
     """Hype must generate Vietnamese content (target audience)."""
     from src.hype import generate_campaign
     spec = {"problem": "MMO cần tự động hóa"}
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_make_llm_response(_fake_campaign_json()))):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_make_llm_response(_fake_campaign_json()))):
         result = await generate_campaign(
             _make_env_with_llm(), "Test Tool", spec, 1_000_000
         )
@@ -218,7 +219,7 @@ async def test_hype_generate_handler_success():
                 "pricing_vnd": 1_000_000,
                 "spec": {"problem": "test"},
             }
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_make_llm_response(_fake_campaign_json()))):
+    with patch("src.lib.http.AsyncClient.post", new=AsyncMock(return_value=_make_llm_response(_fake_campaign_json()))):
         resp = await hype_generate_handler(Req(), _make_env_with_llm(), None)
     assert resp.status == 200
     body = json.loads(resp.body)

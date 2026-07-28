@@ -2,7 +2,7 @@
 -- Database: toolforge-db
 -- Created: 2026-07-27
 --
--- Tables: 8 core tables + 1 index
+-- Tables: 7 core tables + 1 index (campaigns moved to 0004)
 -- All timestamps in UTC ISO 8601
 
 -- ============================================================
@@ -131,28 +131,14 @@ CREATE INDEX IF NOT EXISTS idx_conv_user ON conversations(user_id, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_conv_channel ON conversations(channel, ts DESC);
 
 -- ============================================================
--- 8. campaigns — Hype marketing campaign tracking
+-- 8. (moved to migrations/0004_campaigns.sql)
+-- Originally this migration created a `campaigns` table for per-channel
+-- ad tracking (FB / TikTok / Google variant, spend, ROAS). That schema
+-- was superseded by 0004 which stores the LLM-generated Hype content
+-- (landing copy + ad variants + TikTok script) as a single row per
+-- tool. Keep this comment so the migration order is obvious for anyone
+-- reading 0001 in isolation.
 -- ============================================================
-CREATE TABLE IF NOT EXISTS campaigns (
-  id TEXT PRIMARY KEY,                  -- "campaign-capcut-reup-2026-07"
-  tool_id TEXT NOT NULL,                -- FK -> tools.id
-  channel TEXT NOT NULL,                -- facebook | tiktok | google | organic
-  variant TEXT,                         -- A | B | control
-  content TEXT,                         -- Ad copy
-  status TEXT NOT NULL DEFAULT 'draft',  -- draft | live | paused | ended
-  spend_vnd INTEGER DEFAULT 0,
-  reach INTEGER DEFAULT 0,
-  clicks INTEGER DEFAULT 0,
-  installs INTEGER DEFAULT 0,
-  purchases INTEGER DEFAULT 0,
-  revenue_vnd INTEGER DEFAULT 0,
-  roas REAL,                            -- revenue / spend
-  started_at TEXT,
-  ended_at TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_campaigns_tool ON campaigns(tool_id);
-CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
 
 -- ============================================================
 -- 9. llm_usage — track token usage cho cost monitoring

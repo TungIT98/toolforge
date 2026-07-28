@@ -2,28 +2,28 @@
 import json
 from unittest.mock import AsyncMock, patch
 
-import httpx
 import pytest
 
+from src.lib.http import _Response as _MockResponse
 from tests.test_e2e import FakeD1, FakeEnv
 
 
-def _llm_response_json(content: str) -> httpx.Response:
-    return httpx.Response(200, json={
+def _llm_response_json(content: str) -> _MockResponse:
+    return _MockResponse(200, json.dumps({
         "id": "msg_test", "model": "minimax/MiniMax-M3-test",
         "content": [{"type": "text", "text": content}],
         "usage": {"input_tokens": 100, "output_tokens": 300},
         "stop_reason": "end_turn",
-    })
+    }))
 
 
-def _llm_response_text(text: str) -> httpx.Response:
-    return httpx.Response(200, json={
+def _llm_response_text(text: str) -> _MockResponse:
+    return _MockResponse(200, json.dumps({
         "id": "msg_test", "model": "minimax/MiniMax-M3-test",
         "content": [{"type": "text", "text": text}],
         "usage": {"input_tokens": 100, "output_tokens": 300},
         "stop_reason": "end_turn",
-    })
+    }))
 
 
 def _spec_response() -> str:
@@ -104,7 +104,7 @@ def _make_mock_post():
 async def test_run_pipeline_full_success():
     """Full 5-phase pipeline runs to success, creates tool in store."""
     from src.orchestrator import run_pipeline
-    with patch("httpx.AsyncClient.post", new=_make_mock_post()):
+    with patch("src.lib.http.AsyncClient.post", new=_make_mock_post()):
         env = FakeEnv()
         result = await run_pipeline(
             env, "MMOer mất 3 giờ/ngày reup TikTok", trigger="test"
@@ -139,7 +139,7 @@ async def test_run_pipeline_creates_db_records():
     """Pipeline creates run + 5 step records in DB."""
     from src.orchestrator import get_run, run_pipeline
     env = FakeEnv()
-    with patch("httpx.AsyncClient.post", new=_make_mock_post()):
+    with patch("src.lib.http.AsyncClient.post", new=_make_mock_post()):
         result = await run_pipeline(env, "Test pain point", trigger="test")
 
     assert len(env.DB.tables["pipeline_runs"]) == 1
@@ -161,7 +161,7 @@ async def test_run_pipeline_creates_db_records():
 @pytest.mark.asyncio
 async def test_run_pipeline_with_tool_name_override():
     from src.orchestrator import run_pipeline
-    with patch("httpx.AsyncClient.post", new=_make_mock_post()):
+    with patch("src.lib.http.AsyncClient.post", new=_make_mock_post()):
         env = FakeEnv()
         result = await run_pipeline(env, "Test pain", tool_name="Custom Tool Name")
     assert result["tool_name"] == "Custom Tool Name"
@@ -181,7 +181,7 @@ async def test_get_run_not_found():
 async def test_get_run_with_steps():
     from src.orchestrator import get_run, run_pipeline
     env = FakeEnv()
-    with patch("httpx.AsyncClient.post", new=_make_mock_post()):
+    with patch("src.lib.http.AsyncClient.post", new=_make_mock_post()):
         result = await run_pipeline(env, "Test", tool_name="My Tool")
     run = await get_run(env.DB, result["run_id"])
     assert run is not None
@@ -223,7 +223,7 @@ async def test_handler_run_full():
     class Req:
         async def json(self):
             return {"input": "Test", "tool_name": "Test Tool"}
-    with patch("httpx.AsyncClient.post", new=_make_mock_post()):
+    with patch("src.lib.http.AsyncClient.post", new=_make_mock_post()):
         resp = await orchestrator_run_handler(Req(), FakeEnv(), None)
     body = json.loads(resp.body)
     assert body["ok"] is True
@@ -238,7 +238,7 @@ async def test_handler_get_run():
     class RunReq:
         async def json(self):
             return {"input": "Test", "tool_name": "Test Tool"}
-    with patch("httpx.AsyncClient.post", new=_make_mock_post()):
+    with patch("src.lib.http.AsyncClient.post", new=_make_mock_post()):
         resp1 = await orchestrator_run_handler(RunReq(), env, None)
     body1 = json.loads(resp1.body)
     run_id = body1["run_id"]
