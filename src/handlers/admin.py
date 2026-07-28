@@ -10,8 +10,6 @@ Endpoints:
   GET  /api/admin/pending-specs  Specs awaiting owner review
   GET  /api/admin/briefs         Recent Scout briefs
   GET  /api/admin/builds         Recent builds
-  GET  /api/admin/errors         Recent critical errors from KV log (?severity=)
-  GET  /api/admin/error-stats    Aggregated error counts by severity
 """
 from __future__ import annotations
 
@@ -168,56 +166,3 @@ async def admin_builds_handler(request: "object", env: "object", ctx: "object") 
         "FROM builds ORDER BY created_at DESC LIMIT 50"
     ).bind().all()
     return json_response({"ok": True, "count": len(rows or []), "builds": rows or []})
-
-
-@route("GET", "/api/admin/errors")
-async def admin_errors_handler(request: "object", env: "object", ctx: "object") -> "Response":
-    """List recent critical errors from KV monitoring log.
-
-    Query params:
-      ?limit=N         1-200 (default 50)
-      ?severity=error  filter by severity (error|warn|info)
-    """
-    err = _check(request, env)
-    if err:
-        return err
-    from src.lib.monitoring import list_recent_errors
-    # Parse query
-    url = getattr(request, "url", "") or ""
-    limit = 50
-    severity = None
-    if "?" in url:
-        qs = url.split("?", 1)[1]
-        for pair in qs.split("&"):
-            if "=" in pair:
-                k, v = pair.split("=", 1)
-                if k == "limit":
-                    try:
-                        limit = max(1, min(200, int(v)))
-                    except (ValueError, TypeError):
-                        pass
-                elif k == "severity":
-                    if v in ("error", "warn", "info"):
-                        severity = v
-    errors = await list_recent_errors(env, limit=limit, severity=severity)
-    return json_response({
-        "ok": True,
-        "count": len(errors),
-        "errors": errors,
-    })
-
-
-@route("GET", "/api/admin/error-stats")
-async def admin_error_stats_handler(request: "object", env: "object", ctx: "object") -> "Response":
-    """Get aggregated error counts by severity (last 200 errors)."""
-    err = _check(request, env)
-    if err:
-        return err
-    from src.lib.monitoring import get_error_count_by_severity, list_recent_errors
-    errors = await list_recent_errors(env, limit=200)
-    stats = get_error_count_by_severity(errors)
-    return json_response({
-        "ok": True,
-        "stats": stats,
-        "total_recent": len(errors),
-    })

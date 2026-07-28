@@ -36,19 +36,6 @@ class Default:
             return await dispatch(request, env, ctx)
         except Exception as e:
             log.error("worker_unhandled", err=str(e), path=getattr(request, "path", "?"))
-            # Log to KV for monitoring
-            try:
-                from src.lib.monitoring import log_error_to_kv, get_request_id
-                await log_error_to_kv(
-                    env,
-                    severity="error",
-                    endpoint=getattr(request, "path", "?"),
-                    error=f"Unhandled exception: {e}",
-                    code="INTERNAL_ERROR",
-                    request_id=get_request_id(),
-                )
-            except Exception:
-                pass
             return error_response(
                 f"Internal error: {e}",
                 status=500,

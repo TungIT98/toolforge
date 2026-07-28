@@ -61,8 +61,6 @@ def test_router_registers_critical_endpoints():
         ("GET", "/api/admin/pending-specs"),
         ("GET", "/api/admin/briefs"),
         ("GET", "/api/admin/builds"),
-        ("GET", "/api/admin/errors"),
-        ("GET", "/api/admin/error-stats"),
         ("POST", "/api/telegram/webhook"),
         ("POST", "/api/telegram/setup"),
         ("GET", "/api/telegram/status"),

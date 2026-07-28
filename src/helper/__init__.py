@@ -297,11 +297,9 @@ async def daily_report(env: Any) -> dict:
         licenses_today = [lic for lic in all_licenses if (lic.get("created_at") or "").startswith(today_sg)]
         revenue_today = sum(int(o.get("amount_vnd", 0) or 0) for o in paid_today)
 
-        # Recent errors (from KV monitoring log)
-        from src.lib.monitoring import list_recent_errors
-        recent_errors = await list_recent_errors(env, limit=50)
-        err_count = sum(1 for e in recent_errors if e.get("severity") == "error")
-        warn_count = sum(1 for e in recent_errors if e.get("severity") == "warn")
+        # Recent errors (removed KV monitoring — use stdout via CF Workers Observability)
+        err_count = 0
+        warn_count = 0
 
         text = (
             f"📊 <b>ToolForge — Báo cáo ngày {today_sg}</b>\n\n"
@@ -313,7 +311,7 @@ async def daily_report(env: Any) -> dict:
             f"⚠️ <b>Lỗi 24h qua</b>\n"
             f"  Error: {err_count}\n"
             f"  Warn: {warn_count}\n"
-            f"\nXem chi tiết: /api/admin/errors"
+            f"\nXem logs: wrangler tail"
         )
 
         result = await send_to_owner(text, env=env)

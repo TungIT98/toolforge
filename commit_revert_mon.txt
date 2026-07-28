@@ -1,0 +1,21 @@
+refactor: revert KV error log + admin/errors, keep X-Request-Id
+
+Reason: Phản biệt lại sau khi đẩy #4 — monitoring KV + admin/errors endpoint
+over-engineered cho MVP. CF Workers Observability (stdout) đủ cho demo.
+
+KEEP:
+- X-Request-Id: useful cho live demo trace (Orchestrator pipeline visibility)
+
+REMOVE:
+- log_error_to_kv, list_recent_errors, get_error_count_by_severity
+- /api/admin/errors, /api/admin/error-stats endpoints
+- log_error_to_kv calls in router (404 path) + worker (unhandled exception)
+- daily_report Telegram section "Lỗi 24h qua" (now hardcoded 0,0 + "wrangler tail")
+- test_monitoring.py: trimmed from 18 → 7 tests (request_id only)
+- test_admin.py: removed 4 admin error tests
+
+Stats:
+- Tests: 237 → 222 (-15)
+- Lines removed: ~500 LOC (monitoring.py, admin errors, tests)
+
+Next: Build Orchestrator + Hype + /showcase demo page.

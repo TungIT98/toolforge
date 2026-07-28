@@ -80,13 +80,7 @@ async def dispatch(request: "object", env: "object", ctx: "object") -> "Response
             response = await fn(request, env, ctx)
             return _add_request_id_header(response, rid)
 
-    # 404 — log to monitoring as warn
+    # 404 — log to stdout only
     log.warn("route_not_found", method=method, path=url_path, request_id=rid)
-    from src.lib.monitoring import log_error_to_kv
-    await log_error_to_kv(
-        env, severity="warn", endpoint=url_path,
-        error=f"Route not found: {method} {url_path}",
-        code="ROUTE_NOT_FOUND", request_id=rid,
-    )
     response = error_response(f"No route for {method} {url_path}", status=404, code="ROUTE_NOT_FOUND")
     return _add_request_id_header(response, rid)
