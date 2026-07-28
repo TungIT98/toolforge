@@ -67,6 +67,7 @@ def test_router_registers_critical_endpoints():
         ("POST", "/api/orchestrator/run"),
         ("GET", "/api/orchestrator/runs"),
         ("GET", "/showcase"),
+        ("GET", "/agents"),
     ]
     missing = [(m, p) for m, p in critical if (m, p) not in registered]
     assert not missing, (

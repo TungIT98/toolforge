@@ -1,0 +1,46 @@
+feat(agents): apply agency-agents patterns to ToolForge
+
+Inspired by https://github.com/msitarzewski/agency-agents (137K stars, 230+
+agents, 22K forks). Applied the high-value patterns to our 5 focused agents.
+
+CHANGES:
+
+1. YAML frontmatter on all 5 PERSONA.md
+   - name, description, color, emoji, vibe (1-line tagline)
+   - Enables programmatic parsing + visual display
+   - Files: scout, architect, forge, hype, helper
+
+2. Personality Highlights section
+   - 1 iconic quote per agent
+   - Identity alignment for owners + testers
+   - Example for Scout: "Mình không research cho vui — mình tìm pain point mà tuần này có người sẵn sàng trả tiền."
+
+3. Example sentences in Communication Style
+   - 5 concrete sample sentences per agent
+   - LLM prompt picks up pattern → consistent output
+   - Example for Architect: "📐 Spec `data/specs/capcut-reup.md` đã xong, 10 mục đầy đủ. Anh Zui review giúp mình tại <link>."
+
+4. New /agents roster page (src/handlers/agents.py)
+   - Self-contained HTML, no build step
+   - Mirrors agency-agents README table format
+   - Shows: roster cards + pipeline diagram + 1 quote per agent + CTA to /showcase
+   - Inspired by agency-agents, credits in footer
+
+5. Tests added: tests/test_agents.py (6 tests, all pass)
+
+WHAT WE DIDN'T APPLY (deliberately):
+- 230+ agents (we have 5, focused on MMO/creator niche)
+- Multi-tool installer (our agents are part of codebase)
+- 15+ divisions (over-engineering for focused product)
+- Translations (we're Vietnamese-first)
+- App for browsing agents (premature for 5)
+
+Stats:
+- Tests: 257 → 263 (+6)
+- New file: src/handlers/agents.py (11KB)
+- New file: tests/test_agents.py (3KB)
+- 5 PERSONA.md updated: frontmatter + quote + examples
+
+The /agents page is the "team" complement to /showcase:
+- /showcase = "watch them work" (live pipeline)
+- /agents = "meet the team" (roster + pipeline diagram + quotes)
