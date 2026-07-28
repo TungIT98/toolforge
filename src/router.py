@@ -68,8 +68,8 @@ async def dispatch(request: "object", env: "object", ctx: "object") -> "Response
     # CRITICAL: must import ALL handler modules so their @route decorators
     # run and register routes. Missing one = endpoint 404 in production.
     from src.handlers import (  # noqa: F401
-        admin, architect, builder, forge, health, license, llm,
-        payment, scout, store, telegram, version,
+        admin, architect, builder, forge, health, hype, license, llm,
+        orchestrator, payment, scout, showcase, store, telegram, version,
     )
 
     url_path = request.path  # type: ignore[attr-defined]

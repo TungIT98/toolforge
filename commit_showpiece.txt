@@ -1,0 +1,65 @@
+feat(showpiece): 5-agent pipeline + Hype + Orchestrator + Showcase demo
+
+THE SHOWPIECE: 1 URL demo (/showcase) → 1 click → 5 AI agents collaborate
+end-to-end → 1 new tool published to store. ~30s end-to-end. Live trace visible.
+
+NEW: Hype 📣 marketing agent (commit work_a)
+- src/hype/__init__.py: generate_campaign() via LLM
+  - Output: landing copy + 2 FB ad variants + TikTok script (Vietnamese)
+  - Handles markdown fence + JSON parse failures gracefully
+- src/handlers/hype.py: HTTP endpoints
+  - POST /api/hype/generate, GET /api/hype/campaigns, GET /api/hype/campaign/{id}
+- migrations/0004_campaigns.sql: campaign storage table
+- 17 tests, 100% pass
+
+NEW: Orchestrator 🎼 (conductor) — THE missing piece
+- src/orchestrator/__init__.py: run_pipeline() executes 5 phases in sequence:
+  1. Scout: pain point from input
+  2. Architect: 10-section spec
+  3. Forge: code generation
+  4. Hype: marketing campaign
+  5. Store: publish tool to catalog
+- Each phase recorded in pipeline_steps table (live trace support)
+- pipeline_runs table tracks run-level state
+- Returns: {run_id, status, steps, tool_id, tool_name}
+- src/handlers/orchestrator.py: HTTP endpoints
+  - POST /api/orchestrator/run, GET /api/orchestrator/run/{id}, GET /api/orchestrator/runs
+- migrations/0005_pipeline.sql: pipeline_runs + pipeline_steps tables
+- 12 tests, 100% pass
+
+NEW: Showcase demo page
+- src/handlers/showcase.py: GET /showcase → inline HTML
+- Self-contained: no build step, instant deploy
+- Modern dark UI, gradient text, live trace, Vietnamese
+- Polls /api/orchestrator/run/{id} every 1.5s
+- Shows 5 phase cards with status (pending/running/success/failed) + duration
+- 3 tests, 100% pass
+
+FakeD1 extended:
+- Added campaigns, pipeline_runs, pipeline_steps tables
+- INSERT + UPDATE handlers for new tables
+- ORDER BY support for pipeline_steps (sorted by step_index)
+
+Files changed (5 commits expected):
+- src/hype/__init__.py (NEW)
+- src/handlers/hype.py (NEW)
+- src/orchestrator/__init__.py (NEW)
+- src/handlers/orchestrator.py (NEW)
+- src/handlers/showcase.py (NEW)
+- migrations/0004_campaigns.sql (NEW)
+- migrations/0005_pipeline.sql (NEW)
+- src/router.py: register hype, orchestrator, showcase
+- tests/test_hype.py (NEW, 17 tests)
+- tests/test_orchestrator.py (NEW, 12 tests)
+- tests/test_showcase.py (NEW, 3 tests)
+- tests/test_router.py: add new critical routes
+- tests/test_e2e.py: FakeD1 support for new tables
+- src/handlers/admin.py: docstring update
+
+Stats:
+- Tests: 222 → 254 (+32)
+- Endpoints: 41 → 47 (+6: 3 hype + 3 orchestrator + 1 showcase page)
+- New tables: 2 (campaigns, pipeline_runs + pipeline_steps)
+- Total LOC: +2000
+
+Next: deploy + document for demo. Then verify live in CF Workers.

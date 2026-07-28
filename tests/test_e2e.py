@@ -49,6 +49,8 @@ class FakeD1:
             "licenses": [], "llm_usage": [], "tools": [],
             "orders": [], "payment_events": [],
             "builder_sessions": [], "builder_messages": [], "builder_jobs": [],
+            "campaigns": [],
+            "pipeline_runs": [], "pipeline_steps": [],
         }
 
     def prepare(self, sql: str) -> FakeD1Statement:
@@ -174,6 +176,76 @@ class FakeD1:
             row.setdefault("status", "active")
             self.tables["licenses"] = [r for r in self.tables["licenses"] if r["key"] != row["key"]]
             self.tables["licenses"].append(row)
+        elif sql_l.startswith("insert or replace into campaigns") or sql_l.startswith("insert into campaigns"):
+            try:
+                cols_part = sql_l.split("(", 1)[1].split(")")[0]
+                cols = [c.strip() for c in cols_part.split(",")]
+            except Exception:
+                cols = []
+            row = {}
+            for i, col in enumerate(cols):
+                if i < len(params):
+                    row[col] = params[i]
+            self.tables["campaigns"] = [r for r in self.tables["campaigns"] if r["tool_id"] != row["tool_id"]]
+            self.tables["campaigns"].append(row)
+        elif sql_l.startswith("insert into pipeline_runs") or sql_l.startswith("insert or replace into pipeline_runs"):
+            try:
+                cols_part = sql_l.split("(", 1)[1].split(")")[0]
+                cols = [c.strip() for c in cols_part.split(",")]
+            except Exception:
+                cols = []
+            row = {}
+            for i, col in enumerate(cols):
+                if i < len(params):
+                    row[col] = params[i]
+            self.tables["pipeline_runs"] = [r for r in self.tables["pipeline_runs"] if r.get("id") != row.get("id")]
+            self.tables["pipeline_runs"].append(row)
+        elif sql_l.startswith("update pipeline_runs"):
+            run_id = params[-1]
+            for r in self.tables["pipeline_runs"]:
+                if r.get("id") == run_id:
+                    set_part = sql_l.split("set")[1].split("where")[0]
+                    clauses = [c.strip() for c in set_part.split(",") if "=" in c]
+                    param_idx = 0
+                    for clause in clauses:
+                        if "?" not in clause:
+                            k, v = clause.split("=", 1)
+                            v_stripped = v.strip().strip("'\"")
+                            r[k.strip()] = v_stripped
+                        else:
+                            k = clause.split("=")[0].strip()
+                            if param_idx < len(params) - 1:
+                                r[k] = params[param_idx]
+                            param_idx += 1
+        elif sql_l.startswith("insert into pipeline_steps") or sql_l.startswith("insert or replace into pipeline_steps"):
+            try:
+                cols_part = sql_l.split("(", 1)[1].split(")")[0]
+                cols = [c.strip() for c in cols_part.split(",")]
+            except Exception:
+                cols = []
+            row = {}
+            for i, col in enumerate(cols):
+                if i < len(params):
+                    row[col] = params[i]
+            self.tables["pipeline_steps"] = [r for r in self.tables["pipeline_steps"] if r.get("id") != row.get("id")]
+            self.tables["pipeline_steps"].append(row)
+        elif sql_l.startswith("update pipeline_steps"):
+            step_id = params[-1]
+            for r in self.tables["pipeline_steps"]:
+                if r.get("id") == step_id:
+                    set_part = sql_l.split("set")[1].split("where")[0]
+                    clauses = [c.strip() for c in set_part.split(",") if "=" in c]
+                    param_idx = 0
+                    for clause in clauses:
+                        if "?" not in clause:
+                            k, v = clause.split("=", 1)
+                            v_stripped = v.strip().strip("'\"")
+                            r[k.strip()] = v_stripped
+                        else:
+                            k = clause.split("=")[0].strip()
+                            if param_idx < len(params) - 1:
+                                r[k] = params[param_idx]
+                            param_idx += 1
         elif sql_l.startswith("insert or replace into tools") or sql_l.startswith("insert into tools"):
             # Detect column order by parsing INSERT column list
             try:
@@ -355,6 +427,24 @@ class FakeD1:
             ]
         elif "from licenses where key" in sql_l:
             matches = [l for l in self.tables["licenses"] if l["key"] == params[0]]
+        elif "from campaigns" in sql_l:
+            if "where tool_id = ?" in sql_l:
+                matches = [c for c in self.tables["campaigns"] if c["tool_id"] == params[0]]
+            else:
+                matches = list(self.tables["campaigns"])
+        elif "from pipeline_runs" in sql_l:
+            if "where id = ?" in sql_l:
+                matches = [r for r in self.tables["pipeline_runs"] if r.get("id") == params[0]]
+            else:
+                matches = list(self.tables["pipeline_runs"])
+        elif "from pipeline_steps" in sql_l:
+            if "where run_id = ?" in sql_l and "order by step_index" in sql_l:
+                matches = sorted(
+                    [s for s in self.tables["pipeline_steps"] if s.get("run_id") == params[0]],
+                    key=lambda s: s.get("step_index", 0),
+                )
+            else:
+                matches = list(self.tables["pipeline_steps"])
         elif "from tools" in sql_l and "group by" not in sql_l:
             # Parse WHERE clauses (support AND + OR + LIKE)
             where_match = _re.search(r"where\s+(.*?)(?:\s+order by|\s+limit|$)", sql_l, _re.DOTALL)
