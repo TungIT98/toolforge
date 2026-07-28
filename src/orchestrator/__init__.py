@@ -291,7 +291,8 @@ async def run_pipeline(
         # Take first 5 words as tool name
         tool_name = " ".join(input_text.split()[:5]).title() or "AI Tool"
 
-    tool_id = ""
+    # Derive tool_id from tool_name early (used by Hype + Store phases)
+    tool_id = tool_name.lower().replace(" ", "-").replace("/", "-").replace("_", "-")[:30]
     final_status = "success"  # default; only set to "failed" if a phase fails
     steps_summary = []
 

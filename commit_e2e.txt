@@ -1,0 +1,26 @@
+test(showpiece): E2E test for full showcase pipeline
+
+3 E2E tests that exercise the entire showpiece flow:
+1. test_e2e_showcase_full_flow: 1 click → 5 agents → 1 tool + 1 campaign
+   - Verifies all 5 phases complete in order
+   - Verifies tool published to store
+   - Verifies campaign saved to DB
+   - Verifies X-Request-Id propagates through
+
+2. test_e2e_showcase_creates_unique_tool_id_from_name
+   - "My Cool Tool" → tool_id "my-cool-tool"
+
+3. test_e2e_showcase_pipeline_runs_listed_in_order
+   - Multiple runs all listed correctly
+
+Bug fix in orchestrator:
+- Derived tool_id from tool_name EARLY (was empty at Hype phase,
+  campaign was saved with empty tool_id)
+- Changed final_status default from "running" to "success"
+  (only set to "failed" if a phase fails)
+
+Stats:
+- Tests: 254 → 257 (+3 E2E)
+- Full suite: 257/257 passing in 24s
+
+Next: deploy to CF Workers, verify /showcase works live.
