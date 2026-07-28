@@ -3,7 +3,15 @@
 > **Six AI agents that collaborate end-to-end on Cloudflare Workers.**
 > One pain point in → one published tool with landing page, ads, and customer-support bot out. ~30 seconds.
 
-[**▶ Live demo · /showcase**](https://toolforge-api.tungit98.workers.dev/showcase) · [**👥 Meet the team · /agents**](https://toolforge-api.tungit98.workers.dev/agents) · [API · /api/health](https://toolforge-api.tungit98.workers.dev/api/health)
+**Run it locally in 60 seconds:** `pip install -e . && wrangler dev` → open `http://localhost:8787/showcase` → click *Run Pipeline*. The whole thing lives on the free tier when you deploy ([5-minute setup →](./docs/SETUP.md)).
+
+<p align="center">
+  <img src="docs/screenshots/showcase.png" alt="ToolForge showcase — the 5-agent pipeline demo UI" width="800">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/agents.png" alt="Meet the 5 agents — Scout, Architect, Forge, Hype, Store, Helper" width="800">
+</p>
 
 ---
 
@@ -141,6 +149,7 @@ These are the things that cost me a day each. I'm writing them down so the next 
 
 - **Module state on CF Workers persists across requests in the same isolate.** Good for caches, dangerous for config. CORS origins and request-id have to be *set on every request* via `configure_cors(env=env)` — never assume first-request values carry over. This is now enforced in `dispatch()`.
 - **`router.py` was importing 4 of 11 handler modules.** Everything else 404'd in production while tests passed (they bypass the router). The fix: an explicit import block in `dispatch()` with a comment that says "must import ALL handler modules" and a regression test that asserts every handler module has at least one route registered. See `tests/test_router.py`.
+- **Path parameters in routes were silently broken too.** `@route("POST", "/api/builder/session/{session_id}/message")` registered the literal pattern, but the runtime only did `if p == url_path`, so dynamic segments never matched in production. Same failure mode as the import bug: tests pass because they check the registered pattern, not the actual dispatch. The fix: `route()` now compiles `{name}` placeholders to a regex, and `dispatch()` matches with `regex.match(url_path)` + attaches `path_params` to the request. New regression tests cover both the regex compilation and the parameter extraction. See `src/router.py` and `tests/test_router.py`.
 - **D1 (and the `FakeD1` we use in tests) doesn't support `COUNT()`, `SUM()`, or `DATE()` aggregations** in the way you'd expect. The pattern that works: fetch rows with `.all()`, then aggregate in Python. We hit this in the Helper daily report and in the Hype stats endpoints.
 - **Mock LLM routing is order-sensitive.** The Hype system prompt contains the word "spec", so a naive mock that decides which fake response to return by keyword needs to check Hype *before* Architect, or the tests are silently lying.
 - **Hype's `tool_id` had to be derived from `tool_name` *before* the pipeline started**, so the campaign record could reference the same id the Store phase would later insert. Otherwise the campaign pointed at a tool that didn't exist yet.
@@ -186,10 +195,12 @@ toolforge/
 - [x] **P3** — Builder Tool (user-facing describe → build)
 - [x] **P3.5** — Hype + Orchestrator + Showcase demo
 - [x] **P3.7** — Agency-agents patterns (PERSONA.md frontmatter + /agents roster)
-- [ ] **P4** — Tauri build pipeline on GitHub Actions → R2 → signed URL
+- [x] **P4** — Tauri build pipeline (GH Action + R2 upload + 7-day signed URL)
 - [ ] **P4.5** — Freemium tracking for Builder (3 free / day)
 - [ ] **P5** — Helper Telegram bot live (waiting on owner bot token)
 - [ ] **P6** — Public marketplace at `toolforge.vn`
+
+> **P4 in detail:** `POST /api/forge/build-binary` triggers a Windows GitHub Actions runner to compile the generated code into a signed `.msi`/`.exe`, uploads to R2, and POSTs back to `/api/forge/webhook/built`. Customers then `GET /api/forge/download/{build_id}` to get a fresh 7-day signed URL. See [docs/P4-BUILD.md](./docs/P4-BUILD.md) for the full flow.
 
 ---
 

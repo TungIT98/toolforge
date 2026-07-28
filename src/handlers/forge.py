@@ -4,18 +4,19 @@ P1: generate code from approved spec, save to D1.
 P4: trigger GH Action for Tauri build, handle webhook callback.
 
 Endpoints:
-  POST /api/forge/build         Generate code from approved spec (P1)
-  POST /api/forge/build-binary  Trigger Tauri build via GH Action (P4)
-  POST /api/forge/webhook/built Handle GH Action callback (P4)
-  GET  /api/forge/download/{id} Get signed download URL (P4)
-  POST /api/forge/license       Generate license key
-  GET  /api/forge/list          List builds
-  GET  /api/forge/get           Get 1 build by id
+  POST /api/forge/build              Generate code from approved spec (P1)
+  POST /api/forge/build-binary       Trigger Tauri build via GH Action (P4)
+  POST /api/forge/webhook/built      Handle GH Action callback (P4)
+  GET  /api/forge/download/{build_id} Get fresh signed download URL (P4)
+  POST /api/forge/license            Generate license key
+  GET  /api/forge/list               List builds
+  GET  /api/forge/get                Get 1 build by id
 """
 from __future__ import annotations
 
 import json
 import os
+import time
 from datetime import datetime, timezone
 
 from src.forge.build_orchestrator import trigger_github_workflow
@@ -351,3 +352,203 @@ async def webhook_built_handler(request: "object", env: "object", ctx: "object")
     # 4. Process
     result = await handle_build_complete(body, env)
     return webhook_handler_response(result, env)
+
+
+# ============================================================
+# P4: trigger GH Action + return signed download URL
+# ============================================================
+
+@route("POST", "/api/forge/build-binary")
+async def forge_build_binary_handler(request: "object", env: "object", ctx: "object") -> "Response":
+    """Trigger Tauri build on GitHub Actions for an existing build record.
+
+    P1 (`/api/forge/build`) generates code and saves it to D1 with
+    `test_result = "pass"`. This endpoint then asks a Windows GitHub
+    Actions runner to actually compile that code into a `.msi` / `.exe`,
+    upload it to R2, and POST the signed URL back to
+    `/api/forge/webhook/built`.
+
+    The build itself is async (~5–10 min on the free runner). The caller
+    polls `/api/forge/get?id={build_id}` or `/api/forge/download/{build_id}`
+    after a few minutes to pick up the binary.
+
+    Request body: { "build_id": "build-capcut-reup-v0.1.0" }
+
+    Required secrets (set via `wrangler secret put`):
+    - GITHUB_TOKEN  : PAT with `workflow` scope on TungIT98/toolforge
+    - WEBHOOK_SECRET: shared with the GH Action (and `/api/forge/webhook/built`)
+    - R2_*          : for the eventual download step
+    """
+    # Rate limit (3 req/min — binary build is expensive)
+    blocked = await apply_rate_limit(request, env, "/api/forge/build-binary")
+    if blocked:
+        return blocked
+
+    try:
+        body = await request.json()  # type: ignore[attr-defined]
+    except Exception as e:
+        return error_response(f"Invalid JSON: {e}", status=400, code="INVALID_JSON")
+    if not isinstance(body, dict):
+        return error_response("Body must be JSON object", status=400, code="INVALID_JSON")
+    build_id = body.get("build_id")
+    if not build_id:
+        return error_response("Missing build_id", status=400, code="MISSING_BUILD_ID")
+
+    db = getattr(env, "DB", None)
+    if db is None:
+        return error_response("D1 not bound", status=500, code="DB_NOT_BOUND")
+
+    build = await db.prepare(
+        "SELECT id, tool_id, version, test_result, handoff_id "
+        "FROM builds WHERE id = ?"
+    ).bind(build_id).first()
+    if not build:
+        return error_response(f"Build {build_id} not found", status=404, code="BUILD_NOT_FOUND")
+    if build["test_result"] not in ("pass", "partial"):
+        return error_response(
+            f"Build {build_id} test_result is '{build['test_result']}', "
+            "must be 'pass' or 'partial'. Run /api/forge/build first.",
+            status=400, code="BUILD_NOT_READY",
+        )
+
+    # Compute callback URL. Prefer env.WORKER_URL (set via wrangler secret/var);
+    # fall back to workers.dev pattern from WORKER_NAME + env.ACCOUNT_SUBDOMAIN.
+    worker_url = (
+        getattr(env, "WORKER_URL", "")
+        or os.environ.get("WORKER_URL", "")
+    )
+    if not worker_url:
+        subdomain = (
+            getattr(env, "ACCOUNT_SUBDOMAIN", "")
+            or os.environ.get("ACCOUNT_SUBDOMAIN", "tungit98")
+        )
+        worker_url = f"https://toolforge-api.{subdomain}.workers.dev"
+    callback_url = f"{worker_url.rstrip('/')}/api/forge/webhook/built"
+
+    # Trigger GH workflow (validates GITHUB_TOKEN + WEBHOOK_SECRET internally)
+    result = await trigger_github_workflow(
+        build_id=build_id,
+        tool_id=build["tool_id"],
+        version=build["version"],
+        callback_url=callback_url,
+        env=env,
+    )
+    if not result["ok"]:
+        code = result.get("code", "TRIGGER_FAILED")
+        return error_response(
+            result.get("error", "unknown"),
+            status=500, code=code,
+        )
+
+    # Mark build as "building" in D1 so callers see the transition
+    try:
+        await db.prepare(
+            "UPDATE builds SET test_result = 'building' WHERE id = ?"
+        ).bind(build_id).run()
+    except Exception as e:
+        log.warn("build_status_update_failed", err=str(e), build_id=build_id)
+
+    return json_response({
+        "ok": True,
+        "build_id": build_id,
+        "tool_id": build["tool_id"],
+        "version": build["version"],
+        "status": "building",
+        "workflow_url": result.get("workflow_url"),
+        "callback_url": callback_url,
+        "poll_url": f"/api/forge/get?id={build_id}",
+        "download_url_template": f"/api/forge/download/{build_id}",
+        "expected_time_minutes": "5-10",
+        "message": (
+            "GH Action triggered. Poll /api/forge/get for status, or call "
+            "/api/forge/download/{build_id} once status flips to 'pass'."
+        ),
+    })
+
+
+@route("GET", "/api/forge/download/{build_id}")
+async def forge_download_handler(request: "object", env: "object", ctx: "object") -> "Response":
+    """Return a fresh R2 signed URL for downloading a built tool binary.
+
+    P4 final step. After `/api/forge/webhook/built` writes a `binary_path`
+    to the build record, the customer (or admin) hits this endpoint to
+    get a 7-day signed URL. We re-sign on every call so the URL is
+    always fresh — there's no client-side expiry tracking.
+
+    Path param: `build_id` (extracted via the router's `{name}` syntax,
+    attached to `request.path_params`).
+    """
+    # Extract build_id from path params (set by router.dispatch())
+    path_params = getattr(request, "path_params", None) or {}
+    build_id = path_params.get("build_id")
+    if not build_id:
+        # Fallback: parse request.path manually (in case router didn't attach)
+        url_path = getattr(request, "path", "")
+        prefix = "/api/forge/download/"
+        if url_path.startswith(prefix):
+            build_id = url_path[len(prefix):].strip("/")
+    if not build_id:
+        return error_response("Missing build_id in path", status=400, code="MISSING_BUILD_ID")
+
+    db = getattr(env, "DB", None)
+    if db is None:
+        return error_response("D1 not bound", status=500, code="DB_NOT_BOUND")
+
+    build = await db.prepare(
+        "SELECT id, tool_id, version, binary_path, binary_url, size_bytes, test_result "
+        "FROM builds WHERE id = ?"
+    ).bind(build_id).first()
+    if not build:
+        return error_response(f"Build {build_id} not found", status=404, code="BUILD_NOT_FOUND")
+    if not build.get("binary_path"):
+        return error_response(
+            f"Build {build_id} has no binary_path. "
+            "Run /api/forge/build → /api/forge/build-binary first, then wait for "
+            "/api/forge/webhook/built to write the path.",
+            status=400, code="NO_BINARY",
+        )
+
+    # R2 credentials — required for fresh signing
+    r2_account_id = (
+        getattr(env, "R2_ACCOUNT_ID", "") or os.environ.get("R2_ACCOUNT_ID", "")
+    )
+    r2_access_key = (
+        getattr(env, "R2_ACCESS_KEY_ID", "") or os.environ.get("R2_ACCESS_KEY_ID", "")
+    )
+    r2_secret = (
+        getattr(env, "R2_SECRET_ACCESS_KEY", "") or os.environ.get("R2_SECRET_ACCESS_KEY", "")
+    )
+    bucket = (
+        getattr(env, "R2_BUCKET", "") or os.environ.get("R2_BUCKET", "toolforge-tools")
+    )
+    if not is_valid_r2_config(r2_account_id, r2_access_key, r2_secret):
+        return error_response(
+            "R2 credentials not configured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, "
+            "R2_SECRET_ACCESS_KEY via `wrangler secret put` before going live.",
+            status=503, code="R2_NOT_CONFIGURED",
+        )
+
+    expires_in = 7 * 24 * 3600  # 7 days
+    signed_url = generate_signed_url(
+        bucket=bucket,
+        key=build["binary_path"],
+        account_id=r2_account_id,
+        access_key_id=r2_access_key,
+        secret_access_key=r2_secret,
+        expires_in_seconds=expires_in,
+    )
+    expires_at = datetime.fromtimestamp(int(time.time()) + expires_in, timezone.utc).isoformat()
+
+    return json_response({
+        "ok": True,
+        "build_id": build_id,
+        "tool_id": build["tool_id"],
+        "version": build["version"],
+        "binary_url": signed_url,
+        "binary_path": build["binary_path"],
+        "cached_url": build.get("binary_url"),  # last URL from webhook, may be expired
+        "size_bytes": build.get("size_bytes", 0),
+        "expires_at": expires_at,
+        "expires_in_days": 7,
+        "test_result": build.get("test_result"),
+    })

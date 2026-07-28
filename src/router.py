@@ -1,7 +1,27 @@
 """Router: match URL path to handler. Kept tiny and explicit.
+
+Supports path parameters via `{name}` syntax. Example:
+
+    @route("GET", "/api/forge/download/{id}")
+    async def handler(request, env, ctx):
+        build_id = request.path_params["id"]   # "build-abc-123"
+        ...
+
+At runtime, `dispatch()` compiles each registered path to a regex
+(`/api/forge/download/{id}` -> `^/api/forge/download/(?P<id>[^/]+)$`)
+and matches incoming `request.path` against it. On a hit, the captured
+groups are attached to the request object as `request.path_params`.
+
+Why the explicit regex instead of exact-string match: a previous bug
+shipped with `@route("POST", "/api/builder/session/{session_id}/message")`
+registered, but the runtime only did `if p == url_path`, so every
+dynamic path 404'd in production. Tests passed because the registered
+list still contained the literal pattern string. The regex match closes
+that hole.
 """
 from __future__ import annotations
 
+import re
 from typing import Awaitable, Callable
 
 from src.lib.log import get_logger
@@ -12,14 +32,28 @@ log = get_logger("router")
 # Handler type: (request, env, ctx) -> Response
 Handler = Callable[["object", "object", "object"], Awaitable["Response"]]
 
-# Map path -> handler
-ROUTES: list[tuple[str, str, Handler]] = []
+# Pattern to convert {name} -> (?P<name>[^/]+)
+_PARAM_RE = re.compile(r"\{(\w+)\}")
+
+# (method, path_pattern, compiled_regex, handler)
+ROUTES: list[tuple[str, str, "re.Pattern[str]", Handler]] = []
+
+
+def _compile_path(path: str) -> "re.Pattern[str]":
+    """Convert /api/foo/{id}/bar -> ^/api/foo/(?P<id>[^/]+)/bar$"""
+    pattern = _PARAM_RE.sub(r"(?P<\1>[^/]+)", path)
+    return re.compile(f"^{pattern}$")
 
 
 def route(method: str, path: str) -> Callable[[Handler], Handler]:
-    """Decorator to register a route."""
+    """Decorator to register a route. Supports {name} path params.
+
+    Examples:
+        @route("GET", "/api/health")
+        @route("POST", "/api/forge/download/{id}")
+    """
     def decorator(fn: Handler) -> Handler:
-        ROUTES.append((method, path, fn))
+        ROUTES.append((method, path, _compile_path(path), fn))
         return fn
     return decorator
 
@@ -75,10 +109,19 @@ async def dispatch(request: "object", env: "object", ctx: "object") -> "Response
     url_path = request.path  # type: ignore[attr-defined]
     method = request.method  # type: ignore[attr-defined]
 
-    for m, p, fn in ROUTES:
-        if m == method and p == url_path:
-            response = await fn(request, env, ctx)
-            return _add_request_id_header(response, rid)
+    for m, p, regex, fn in ROUTES:
+        if m == method:
+            match = regex.match(url_path)
+            if match:
+                # Attach path params to request (best-effort: read-only
+                # request types in some runtimes will raise on setattr,
+                # but tests + CF Workers Python both allow it)
+                try:
+                    request.path_params = match.groupdict()
+                except Exception:
+                    pass
+                response = await fn(request, env, ctx)
+                return _add_request_id_header(response, rid)
 
     # 404 — log to stdout only
     log.warn("route_not_found", method=method, path=url_path, request_id=rid)
