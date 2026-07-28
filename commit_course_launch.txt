@@ -1,0 +1,30 @@
+docs(course): launch plan + Twitter thread draft for Hướng Y pivot
+
+Pivot ToolForge from "ship 1 tool" to "credibility proof → course monetization"
+per Eroca Thanh "AI Money System 2026" framework.
+
+**Strategy:**
+- ToolForge stays free + open source (case study + lead magnet)
+- Course "Build AI Agency on Cloudflare Workers" $199-$999
+- Validation: thread 50K+ impressions in 7d → build Gumroad
+- Thread <50K → pivot angle or audience (corporate vs indie)
+
+**Deliverables (in docs/COURSE-LAUNCH.md):**
+- Twitter bio (≤160 chars)
+- 10-tweet thread "I built 6 AI agents. Here's what I'd teach you."
+  - Honest journey, specific numbers, soft CTA "reply AGENCY for early access"
+  - Last tweet pins GitHub repo as the "real read"
+- Post plan: Tue-Thu 8-10pm ICT (US + SEA overlap)
+- Tracking plan: 24h / 48h / 7d / 14d metrics + decision rules
+- What NOT to do this week (don't build Gumroad yet, don't post HN)
+- What TO do this week (post thread, reply AGENCY DMs, pin thread)
+
+**Why this is staged correctly:**
+- Free value (ToolForge) → audience A (credibility)
+- Thread → build anticipation + measure demand
+- Reply "AGENCY" → warm leads for paid cohort
+- Only build Gumroad / course after signal (50K impressions)
+- HN + LinkedIn deliberately deferred (different audience, different timing)
+
+Owner action: review thread, post Tue-Thu 8-10pm ICT, monitor 48h.
+If "AGENCY" replies >30 → next session builds waitlist + Gumroad skeleton.
